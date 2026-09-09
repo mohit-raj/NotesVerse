@@ -1,0 +1,22 @@
+node_modules/
+
+# Real database (contains your personal notes) — never commit this
+db/vault.sqlite3
+db/vault.sqlite3-shm
+db/vault.sqlite3-wal
+
+# Uploaded photos/PDFs of handwritten notes
+uploads/*
+!uploads/.gitkeep
+
+# Auto/manual backups
+backups/*
+!backups/.gitkeep
+
+# Real secrets (Gemini API key, app password) — never commit this.
+# config.example.json is the committed template instead.
+config.json
+
+# OS / editor noise
+.DS_Store
+*.log
