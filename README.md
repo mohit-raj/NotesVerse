@@ -1,9 +1,17 @@
-# UPSC Revision Vault (local, SQLite + Node.js)
+# NotesVerse (local, SQLite + Node.js)
 
-A personal spaced-repetition notes app for UPSC prep, running entirely on your
-own machine. Data lives in a real SQLite file (`db/vault.sqlite3`), not the
-browser — so it survives clearing browser data and you can back it up by
-copying one file.
+A personal spaced-repetition notes app that runs entirely on your own
+machine. Organize anything into subjects → microthemes → sections → bullets,
+track what's due for revision, time your study sessions, and export clean
+PDFs — all backed by a real SQLite file (`db/vault.sqlite3`), not the
+browser, so your notes survive clearing browser data and back up by copying
+one file.
+
+It ships pre-loaded with a full UPSC civil services syllabus structure
+(GS1–GS4, Essay, Prelims) as a ready-made example, but nothing about the app
+is UPSC-specific — rename the subjects, delete them, or add your own from
+scratch, and it works just as well for any exam, course, or general
+note-taking.
 
 ## Project structure
 ```
@@ -62,16 +70,15 @@ a "subject" or "microtheme" is. `src/app.js` wires the pieces together. Each
 file in `src/routes/` owns exactly one resource and is small enough to read
 in one sitting. `src/config.js` and `src/paths.js` are the only places that
 know about the filesystem, so if you ever move folders around, that's the
-only place to update. Every API route path is unchanged from earlier
-versions of this project — `public/app.js` didn't need a single line
-changed for this refactor.
+only place to update.
 
 ## What's inside
 - **Node.js + Express** REST API, organized by resource (see structure above)
 - **SQLite** database via `better-sqlite3`
-- **Seed script** that pre-loads the full UPSC GS1–GS4 + Essay + Prelims
-  structure as empty microthemes, plus one fully worked example
-  (Agriculture → Public Distribution System & Food Security)
+- **Seed script** that pre-loads a full UPSC GS1–GS4 + Essay + Prelims
+  structure as ready-made example content (Agriculture → Public Distribution
+  System & Food Security is fully worked out as a sample) — optional
+  starting point, not a requirement
 - **Plain HTML/CSS/JS frontend** — no build step, no framework
 - **Optional password lock**, **AI chat** (Gemini, free tier), **file
   attachments**, **live study timer**, **PDF export**, **auto-backups**
@@ -105,9 +112,13 @@ Then open `config.json` and fill in what you want:
 ```bash
 npm run seed
 ```
-This creates `db/vault.sqlite3` and fills it with the full topic structure.
-Running it again is safe — it skips seeding if data already exists. To start
-completely fresh, delete `db/vault.sqlite3*` and re-run `npm run seed`.
+This creates `db/vault.sqlite3` and fills it with the example UPSC topic
+structure — a convenient starting point you're free to rename, gut, or
+delete entirely and build your own subjects from scratch instead. Running
+the seed script again is safe — it skips seeding if data already exists. To
+start completely empty from the beginning, delete `db/vault.sqlite3*` before
+running it, or just delete the seeded subjects from within the app once it's
+running.
 
 ## 5. Start the server
 ```bash
@@ -127,13 +138,13 @@ Open the printed `http://localhost:3000` in your browser.
   PDF**, and an **Attachments** box for photos/PDFs of handwritten notes.
 - Bullets, quotes, summary lines, and thinker points all support:
   - `==text==` → yellow highlight
-  - `^^text^^` → blue highlight (handy for PYQ question phrases)
+  - `^^text^^` → blue highlight (handy for exam-question phrases)
   - `__text__` → underline
   - `**text**` → bold
   - `*text*` → italic
   - `{{color:text}}` → custom color (red, green, blue, navy, orange, purple, grey, black)
   - Prefix a bullet with `- ` for an indented sub-point
-- A floating chat bubble (bottom-left) is a general AI study assistant,
+- An "Ask AI Assistant" button in the sidebar opens a general AI chat,
   powered by your own free Gemini API key — it doesn't yet read your actual
   notes, it's a general-purpose assistant.
 - Dashboard: overall stats, an hours-studied calendar, full-text search
@@ -181,8 +192,9 @@ the `uploads/` folder too — those files aren't stored inside the database.
   in `config.json` first is strongly recommended if you do this.
 
 ## Extending it
-- Add more seed content: edit `STRUCTURE` in `db/seed.js` (only used on an
-  empty database), or just use the in-app `+` buttons.
+- Add your own subject structure: use the in-app `+ Add subject` /
+  `+ Add microtheme` buttons, or edit `STRUCTURE` in `db/seed.js` if you want
+  a different starting point baked in for fresh installs.
 - Add a new API resource: create `src/routes/yourthing.routes.js` following
   the pattern of the existing ones, then mount it in `src/app.js` with
   `app.use("/api", yourThingRoutes)`.
