@@ -322,24 +322,25 @@ textarea.editor{width:100%; min-height:90px; font-family:-apple-system,sans-seri
 [data-theme="dark"] .sticky-preview mark{background:#2a3868; color:#c7d3ff;}
 
 /* ---------- AI CHAT WIDGET ---------- */
-/* The trigger is now a plain inline button inside the sidebar (right
-   below the sticky note) — see .sidebar-chat-trigger. Only the open
-   chat PANEL floats, anchored bottom-left near that button, and only
-   while actively in use, so nothing sits permanently on top of the
-   sidebar's own content. */
-.sidebar-chat-trigger{
-  margin:10px 16px 16px; padding:10px 14px; border-radius:10px;
-  background:var(--panel); border:1px solid var(--box-border);
-  font-family:-apple-system,sans-serif; font-size:13.5px; font-weight:600; color:var(--navy);
-  text-align:center; cursor:pointer;
+/* Default position sits just outside the 300px sidebar, so it never
+   overlaps the subject list or the sticky note below it. When the
+   sidebar is hidden (body.sidebar-hidden), it moves back to the true
+   bottom-left corner since there's nothing left to avoid. */
+.chat-bubble{
+  position:fixed; bottom:18px; left:316px; z-index:30;
+  width:52px; height:52px; border-radius:50%; background:var(--navy); color:#fff;
+  display:flex; align-items:center; justify-content:center; font-size:22px;
+  cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,.25);
+  transition:left .15s;
 }
-.sidebar-chat-trigger:hover{background:var(--panel-strong);}
 .chat-panel{
-  position:fixed; bottom:18px; left:18px; z-index:31;
-  width:340px; max-width:90vw; height:440px; max-height:70vh;
+  position:fixed; bottom:18px; left:316px; z-index:31;
+  width:340px; max-width:90vw; height:440px; max-height:75vh;
   background:var(--bg); border-radius:14px; box-shadow:0 10px 36px rgba(0,0,0,.3);
   display:flex; flex-direction:column; overflow:hidden; border:1px solid var(--border);
+  transition:left .15s;
 }
+body.sidebar-hidden .chat-bubble, body.sidebar-hidden .chat-panel{left:18px;}
 .chat-header{
   background:var(--navy); color:#fff; padding:11px 14px; display:flex; justify-content:space-between;
   align-items:center; font-family:-apple-system,sans-serif; font-size:13.5px; font-weight:700;
@@ -356,7 +357,8 @@ textarea.editor{width:100%; min-height:90px; font-family:-apple-system,sans-seri
 .chat-input-row{display:flex; gap:6px; padding:10px; border-top:1px solid var(--border);}
 .chat-input{flex:1; resize:none; min-height:38px; max-height:90px; border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-family:-apple-system,sans-serif; font-size:13px; background:var(--bg); color:var(--text);}
 @media (max-width:520px){
-  .chat-panel{left:8px; right:8px; width:auto; bottom:8px;}
+  .chat-panel, body.sidebar-hidden .chat-panel{left:8px; right:8px; width:auto; bottom:8px;}
+  .chat-bubble, body.sidebar-hidden .chat-bubble{left:12px;}
 }
 
 /* ---------- PRINT / PDF EXPORT ---------- */
@@ -386,3 +388,36 @@ textarea.editor{width:100%; min-height:90px; font-family:-apple-system,sans-seri
   .attach-name{font-size:13px !important; margin-top:8px !important;}
   .print-only-note{display:block !important; font-family:-apple-system,sans-serif; font-size:12px; color:#555; font-style:italic; margin-top:10px;}
 }
+
+.readlog-link{color:var(--navy); font-weight:600; text-decoration:none;}
+.readlog-link:hover{text-decoration:underline;}
+
+/* ---------- RESPONSIVE SCALING: laptop → large desktop monitor ----------
+   --z scales the whole UI up on big/high-res screens so text stays readable
+   and the page fills the width instead of sitting in a narrow strip. */
+:root{--z:1;}
+#app, #timer-widget, #chat-widget{zoom:var(--z);}
+#app{height:calc(100vh / var(--z));}
+#content{max-width:1100px;}
+@media (min-width:1700px){ :root{--z:1.15;} #content{max-width:1180px;} }
+@media (min-width:1900px){ :root{--z:1.3;}  #content{max-width:1250px;} }
+@media (min-width:2300px){ :root{--z:1.5;}  #content{max-width:1350px;} }
+@media (min-width:2900px){ :root{--z:1.8;}  #content{max-width:1500px;} }
+@media (min-width:3600px){ :root{--z:2.2;}  #content{max-width:1700px;} }
+/* small laptops: slimmer sidebar, tighter padding */
+@media (max-width:1280px){
+  #sidebar{width:260px; min-width:260px;}
+  #content{padding:22px 20px 70px;}
+}
+@media print{ #app{zoom:1; height:auto;} }
+/* ---------- Ask AI Assistant button (sidebar) ---------- */
+#chat-sidebar-trigger{
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  box-sizing:border-box; width:calc(100% - 36px); margin:14px 18px 28px;
+  padding:11px 14px; cursor:pointer;
+  font-family:-apple-system,"Segoe UI",sans-serif; font-size:13.5px; font-weight:700;
+  color:var(--navy); background:var(--panel); border:1px solid var(--navy-2);
+  border-radius:10px; text-align:center; line-height:1.2;
+}
+#chat-sidebar-trigger:hover{background:var(--panel-strong);}
+#sidebar{padding-bottom:12px;}
