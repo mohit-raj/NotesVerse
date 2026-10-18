@@ -110,3 +110,55 @@ CREATE INDEX IF NOT EXISTS idx_microthemes_subject ON microthemes(subject_id);
 CREATE INDEX IF NOT EXISTS idx_sections_mt ON sections(microtheme_id);
 CREATE INDEX IF NOT EXISTS idx_items_section ON items(section_id);
 CREATE INDEX IF NOT EXISTS idx_timelog_mt_date ON time_log(microtheme_id, date);
+
+-- ---------------------------------------------------------------
+-- Micro Plan (daily targets tracker)
+-- ---------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS plan_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
+
+-- track: prelims | mains | ethics | optional
+CREATE TABLE IF NOT EXISTS plan_subjects (
+  id TEXT PRIMARY KEY,
+  track TEXT NOT NULL,
+  name TEXT NOT NULL,
+  status TEXT DEFAULT 'todo',      -- todo | current | done
+  done_on TEXT DEFAULT '',
+  note_subject_id TEXT REFERENCES subjects(id) ON DELETE SET NULL,
+  sort_order INTEGER DEFAULT 0
+);
+
+-- microtheme_id links a plan topic to its microtheme in the notes tree
+-- (kept in sync by db/planner-sync.js).
+CREATE TABLE IF NOT EXISTS plan_topics (
+  id TEXT PRIMARY KEY,
+  subject_id TEXT NOT NULL REFERENCES plan_subjects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  done INTEGER DEFAULT 0,
+  done_on TEXT DEFAULT '',
+  microtheme_id TEXT REFERENCES microthemes(id) ON DELETE SET NULL,
+  sort_order INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS plan_days (
+  date TEXT PRIMARY KEY,
+  note TEXT DEFAULT '',
+  updated_at TEXT
+);
+
+-- One row per day per track. Subject/topic are stored as text so the
+-- log stays readable even after a subject is renamed or removed.
+CREATE TABLE IF NOT EXISTS plan_entries (
+  date TEXT NOT NULL,
+  track TEXT NOT NULL,
+  subject TEXT DEFAULT '',
+  topic TEXT DEFAULT '',
+  target TEXT DEFAULT '',
+  done INTEGER DEFAULT 0,
+  PRIMARY KEY (date, track)
+);
+
+CREATE INDEX IF NOT EXISTS idx_plan_subjects_track ON plan_subjects(track, sort_order);
+CREATE INDEX IF NOT EXISTS idx_plan_topics_subject ON plan_topics(subject_id, sort_order);

@@ -43,7 +43,8 @@ notesverse/
 │   │   ├── summary.routes.js
 │   │   ├── attachments.routes.js # Uploaded images/PDFs
 │   │   ├── notes.routes.js       # Sidebar to-do sticky note
-│   │   └── chat.routes.js        # Gemini AI relay
+│   │   ├── chat.routes.js        # Gemini AI relay
+│   │   └── planner.routes.js     # Micro Plan: subjects, topics, daily targets
 │   └── utils/
 │       ├── id.js              # uid() — random ID generation
 │       └── files.js           # File-extension detection for uploads
@@ -52,6 +53,10 @@ notesverse/
 │   ├── schema.sql              # Table definitions
 │   ├── index.js                # Opens/creates the SQLite file + migrations
 │   ├── seed.js                  # One-time structure + worked example
+│   ├── planner-seed.js          # First-run starter lists for the Micro Plan
+│   ├── planner-seed.json        # …the lists themselves (edit before first run)
+│   ├── planner-sync.js          # Keeps Micro Plan ⇄ notes subjects/microthemes in sync
+│   ├── reset-notes.js           # `npm run reset-notes` — empty the notes tree
 │   ├── backup.js                # `npm run backup` — manual snapshot
 │   └── vault.sqlite3            # Your real data (gitignored)
 │
@@ -62,7 +67,8 @@ notesverse/
     ├── index.html
     ├── login.html
     ├── style.css
-    └── app.js                   # All frontend logic (fetch-based)
+    ├── planner.js               # Micro Plan page (loaded before app.js)
+    └── app.js                   # All other frontend logic (fetch-based)
 ```
 
 **Why this shape:** `server.js` only starts things up — it doesn't know what
@@ -149,6 +155,30 @@ Open the printed `http://localhost:3000` in your browser.
   notes, it's a general-purpose assistant.
 - Dashboard: overall stats, an hours-studied calendar, full-text search
   across every microtheme at once, and a "show only due" filter.
+- **🗓 Micro Plan** (top bar, or the button on the Dashboard sidebar): a
+  flexible daily-targets tracker with four tracks — Prelims, GS mains,
+  Ethics GS4 and Optional.
+  - Each track has an ordered list of subjects (To do → Current → Done)
+    and each subject can hold topics. Paste many lines into "Add topic" to
+    add them all at once.
+  - **Synced with your notes:** a plan subject is a notes subject and a
+    plan topic is a microtheme (same name). Adding either in the plan
+    creates or links it in the notes, and adding a microtheme under a
+    subject that's in the plan adds it as a topic there. Renames carry
+    across both ways. Deletes never cross over, so removing something from
+    the plan keeps your notes. Each topic has a 📖 button to open its
+    notes, and ticking a topic done records a revision for today.
+  - Every day you pick subject + topic, write the target, and tick it when
+    done; there's a note per day. Pick any date to view or edit that day.
+  - Hours shown for a day come from the study timer — there is no second
+    hours field. The sticky note stays your undated scratchpad.
+  - Countdown to prelims and to your mains target date (editable at the
+    bottom), days logged, and subjects done.
+  - Starter lists come from `db/planner-seed.json` on first run only.
+- **Start your notes fresh:** stop the server and run `npm run reset-notes`.
+  It backs up the vault, removes every notes subject and microtheme (with
+  their content), keeps the Micro Plan, and the next `npm start` re-creates
+  the plan's subjects and topics as empty notes.
 
 ## How spaced repetition works here
 Every time you click **Mark revised** (or grade an aspect Good/Easy), the app

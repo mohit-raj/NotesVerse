@@ -26,4 +26,15 @@ if (!aspectCols.includes("last_recall")) {
   db.exec("ALTER TABLE aspects ADD COLUMN last_recall TEXT DEFAULT ''");
 }
 
+/* --- Micro Plan: link plan subjects to notes subjects (added later) --- */
+const planSubjCols = db.prepare("PRAGMA table_info(plan_subjects)").all().map((c) => c.name);
+if (!planSubjCols.includes("note_subject_id")) {
+  db.exec("ALTER TABLE plan_subjects ADD COLUMN note_subject_id TEXT REFERENCES subjects(id) ON DELETE SET NULL");
+}
+
+/* --- Micro Plan: first-run starter subjects/topics, then link them to notes --- */
+require("./planner-seed").seedPlanner(db);
+// reset-notes.js sets NV_SKIP_SYNC so it sees the notes exactly as they were.
+if (!process.env.NV_SKIP_SYNC) require("./planner-sync").backfill(db);
+
 module.exports = db;

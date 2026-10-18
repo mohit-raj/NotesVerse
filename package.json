@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "seed": "node db/seed.js",
-    "backup": "node db/backup.js"
+    "backup": "node db/backup.js",
+    "reset-notes": "node db/reset-notes.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.4.1",

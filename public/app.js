@@ -528,10 +528,16 @@ function renderSidebar() {
         </div>`).join("")}
       <div class="nav-add" onclick="addAspect('${mt.id}')">+ Add aspect</div>
     </div>`;
+  } else if (ui.currentView === "planner") {
+    html += `<div class="sb-section">
+      <div class="sb-title">Micro Plan</div>
+      <div class="sb-sub">Daily targets for prelims, mains, ethics and optional</div>
+    </div>`;
   } else {
     html += `<div class="sb-section">
       <div class="sb-title">Dashboard</div>
       <div class="sb-sub">Overview across every subject</div>
+      <div style="margin-top:8px;"><span class="btn small solid" onclick="openPlanner()">🗓 Open Micro Plan</span></div>
     </div>`;
   }
 
@@ -587,6 +593,7 @@ function renderTopbar() {
       <span class="btn ${ui.test ? "solid" : ""}" onclick="toggleTest()">🧠 Test me</span>
       <span class="btn" onclick="toggleTheme()">${ui.darkMode ? "☀️ Light" : "🌙 Dark"}</span>
       <span class="btn" onclick="openDashboard()">📊 Dashboard</span>
+      <span class="btn ${ui.currentView === "planner" ? "solid" : ""}" onclick="openPlanner()">🗓 Micro Plan</span>
       ${authEnabled ? `<span class="btn" onclick="doLogout()">🔒 Log out</span>` : ""}
     </div>
     <div class="progress-track"><div class="progress-fill" style="width:${mastery}%"></div></div>
@@ -974,6 +981,7 @@ function render() {
   renderSidebar();
   renderTopbar();
   if (ui.currentView === "dashboard") renderDashboard();
+  else if (ui.currentView === "planner") renderPlanner();
   else renderMicrotheme();
 }
 
@@ -1298,6 +1306,7 @@ function findPersonBulletById(id) {
   await refreshTree();
   await loadDashboardNotes();
   await loadAuthStatus();
+  if (ui.currentView === "planner") { try { await loadPlanner(); } catch (e) { /* page shows loading */ } }
   if (!getCurrentMT() && allMicrothemes().length) {
     ui.currentMicrotheme = allMicrothemes()[0].mt.id;
   }

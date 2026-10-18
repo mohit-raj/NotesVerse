@@ -16,6 +16,7 @@ const summaryRoutes = require("./routes/summary.routes");
 const attachmentsRoutes = require("./routes/attachments.routes");
 const notesRoutes = require("./routes/notes.routes");
 const chatRoutes = require("./routes/chat.routes");
+const plannerRoutes = require("./routes/planner.routes");
 
 const app = express();
 app.use(express.json({ limit: "40mb" }));
@@ -42,5 +43,6 @@ app.use("/api", summaryRoutes);
 app.use("/api", attachmentsRoutes);
 app.use("/api", notesRoutes);
 app.use("/api", chatRoutes);
+app.use("/api", plannerRoutes);
 
 module.exports = app;

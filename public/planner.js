@@ -1,0 +1,306 @@
+/* =====================================================================
+   MICRO PLAN — daily targets for Prelims, GS mains, Ethics, Optional.
+   Saved in the same SQLite vault (plan_* tables, /api/planner routes).
+
+   Re-uses what NotesVerse already has instead of duplicating it:
+   - hours studied for a day come from the existing study timer
+     (mergedTimeLog), not a second hours field
+   - subjects and topics stay in sync with the notes tree (subjects and
+     microthemes) — see db/planner-sync.js; each topic gets an 📖 Open
+     notes jump, and ticking it done records a revision
+   - theme, auth, backups and the api()/escapeHtml() helpers are shared
+   The sidebar sticky note stays the undated scratchpad; the day note
+   here is tied to a date.
+   Loaded before app.js; everything here is called after app.js init.
+===================================================================== */
+
+const PL_TRACKS = [
+  { k: "prelims", n: "Prelims" },
+  { k: "mains", n: "GS mains" },
+  { k: "ethics", n: "Ethics GS4" },
+  { k: "optional", n: "Optional" }
+];
+let planner = null;          // { settings, tracks, days }
+let plDay = plLocalDate(new Date());
+const plOpenTopics = new Set();
+let plSaveTimer = null;
+
+function plLocalDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function plToday() { return plLocalDate(new Date()); }
+function plDaysTo(iso) {
+  if (!iso) return null;
+  return Math.round((new Date(iso + "T00:00:00") - new Date(plToday() + "T00:00:00")) / 864e5);
+}
+function plFmt(iso, long) {
+  return new Date(iso + "T00:00:00").toLocaleDateString("en-IN", long
+    ? { weekday: "long", day: "numeric", month: "long", year: "numeric" }
+    : { weekday: "short", day: "numeric", month: "short" });
+}
+function plCurrent(track) { return (planner.tracks[track] || []).find((s) => s.status === "current"); }
+function plFindSubject(id) {
+  for (const t of PL_TRACKS) { const s = (planner.tracks[t.k] || []).find((x) => x.id === id); if (s) return s; }
+  return null;
+}
+function plEntry(date) {
+  if (!planner.days[date]) planner.days[date] = { note: "", tracks: {} };
+  const d = planner.days[date];
+  PL_TRACKS.forEach((t) => {
+    if (!d.tracks[t.k]) { const c = plCurrent(t.k); d.tracks[t.k] = { subject: c ? c.name : "", topic: "", target: "", done: false }; }
+  });
+  return d;
+}
+function plIsLogged(d) { return d && (d.note || Object.values(d.tracks || {}).some((t) => t.target || t.done)); }
+function plMinutes(m) { if (!m) return ""; const h = Math.floor(m / 60), r = m % 60; return h ? `${h}h ${r}m` : `${r}m`; }
+
+async function loadPlanner() { planner = await api("GET", "/api/planner"); }
+async function plReload() {
+  // Day entries only change on this page, so keep the local copy (it may
+  // hold an edit whose save is still pending) and refresh the rest.
+  // The notes tree is refreshed too, since plan changes add microthemes.
+  const days = planner ? planner.days : null;
+  await Promise.all([loadPlanner(), refreshTree()]);
+  if (days) planner.days = days;
+  render();
+}
+function openPlanner() {
+  ui.currentView = "planner"; saveUiPrefs();
+  loadPlanner().then(render).catch(() => {});
+  render();
+}
+
+/* ------------------------------ save one day ------------------------------ */
+function plQueueDaySave() {
+  const el = document.getElementById("pl-save");
+  if (el) el.textContent = "Saving…";
+  clearTimeout(plSaveTimer);
+  const date = plDay;
+  plSaveTimer = setTimeout(() => plSaveDay(date), 700);
+}
+function plSaveDay(date) {
+  const d = planner.days[date];
+  if (!d) return;
+  api("PUT", `/api/planner/days/${date}`, { note: d.note, tracks: d.tracks })
+    .then(() => { const el = document.getElementById("pl-save"); if (el) el.textContent = "Saved"; plRenderStats(); plRenderLog(); })
+    .catch(() => { const el = document.getElementById("pl-save"); if (el) el.textContent = "Not saved"; });
+}
+function plFlushDaySave() { if (plSaveTimer) { clearTimeout(plSaveTimer); plSaveTimer = null; plSaveDay(plDay); } }
+
+/* ------------------------------ render ------------------------------ */
+function renderPlanner() {
+  const c = document.getElementById("content");
+  if (!planner) { c.innerHTML = `<div class="loading">Loading your plan…</div>`; return; }
+  c.innerHTML = `
+    <div class="pl-wrap">
+      <div class="pl-head">
+        <div>
+          <h1 class="pl-title">UPSC 2027 Micro Plan</h1>
+          <div class="pl-sub">${plFmt(plToday(), true)}</div>
+        </div>
+      </div>
+      <div class="cards-row" id="pl-stats"></div>
+
+      <div class="row-between pl-sec-head">
+        <h2 class="plain-head pl-h2" id="pl-day-title"></h2>
+        <div class="pl-daybar">
+          <input type="date" id="pl-day-pick" value="${plDay}" onchange="plPickDay(this.value)" aria-label="Pick a day">
+          <span class="btn small" onclick="plPickDay(plToday())">Today</span>
+          <span class="pl-save" id="pl-save"></span>
+        </div>
+      </div>
+      <div class="pl-studied" id="pl-studied"></div>
+      <div class="pl-grid" id="pl-day-cards"></div>
+      <label class="pl-label" for="pl-day-note">Note for the day</label>
+      <textarea id="pl-day-note" class="pl-input pl-note" placeholder="What went well, what slipped, what to carry to tomorrow"
+        oninput="plSetNote(this.value)" onblur="plFlushDaySave()"></textarea>
+
+      <div class="row-between pl-sec-head"><h2 class="plain-head pl-h2">Subjects</h2>
+        <span class="pl-hint">Tap the status to cycle: To do → Current → Done</span></div>
+      <div class="pl-grid" id="pl-subjects"></div>
+
+      <div class="row-between pl-sec-head"><h2 class="plain-head pl-h2">Log</h2>
+        <span class="pl-hint">Tap a date to open and edit that day</span></div>
+      <div id="pl-log"></div>
+
+      <div class="row-between pl-sec-head"><h2 class="plain-head pl-h2">Dates</h2></div>
+      <div class="pl-dates">
+        <label class="pl-label">Prelims date<input type="date" class="pl-input" value="${planner.settings.examDate || ""}" onchange="plSetDate('examDate', this.value)"></label>
+        <label class="pl-label">Mains target date<input type="date" class="pl-input" value="${planner.settings.mainsDate || ""}" onchange="plSetDate('mainsDate', this.value)"></label>
+      </div>
+    </div>`;
+  plRenderStats();
+  plRenderDay();
+  plRenderSubjects();
+  plRenderLog();
+}
+
+function plRenderStats() {
+  const el = document.getElementById("pl-stats");
+  if (!el || !planner) return;
+  const p = plDaysTo(planner.settings.examDate), m = plDaysTo(planner.settings.mainsDate);
+  const all = PL_TRACKS.flatMap((t) => planner.tracks[t.k] || []);
+  const done = all.filter((s) => s.status === "done").length;
+  const logged = Object.values(planner.days).filter(plIsLogged).length;
+  el.innerHTML = `
+    <div class="dcard"><div class="num">${p == null ? "–" : Math.max(0, p)}</div><div class="lab">DAYS TO PRELIMS</div></div>
+    <div class="dcard"><div class="num">${m == null ? "–" : Math.max(0, m)}</div><div class="lab">DAYS TO MAINS TARGET</div></div>
+    <div class="dcard"><div class="num">${logged}</div><div class="lab">DAYS LOGGED</div></div>
+    <div class="dcard"><div class="num">${done} / ${all.length}</div><div class="lab">SUBJECTS DONE</div>
+      <div class="bar"><div style="width:${all.length ? (done / all.length) * 100 : 0}%"></div></div></div>`;
+}
+
+function plRenderDay() {
+  const e = plEntry(plDay);
+  document.getElementById("pl-day-title").textContent = plDay === plToday() ? "Today's targets" : "Targets · " + plFmt(plDay);
+  document.getElementById("pl-day-pick").value = plDay;
+  document.getElementById("pl-day-note").value = e.note || "";
+  const mins = (typeof mergedTimeLog === "function" ? mergedTimeLog() : {})[plDay] || 0;
+  document.getElementById("pl-studied").innerHTML = mins
+    ? `⏱ <b>${plMinutes(mins)}</b> studied on this day (from the study timer)`
+    : `⏱ No timer time logged on this day`;
+
+  document.getElementById("pl-day-cards").innerHTML = PL_TRACKS.map((t) => {
+    const te = e.tracks[t.k];
+    const subs = planner.tracks[t.k] || [];
+    const names = subs.map((s) => s.name);
+    const opts = (te.subject && !names.includes(te.subject) ? [te.subject] : []).concat(names);
+    const sObj = subs.find((s) => s.name === te.subject);
+    const tops = (sObj && sObj.topics) || [];
+    const tnames = tops.map((x) => x.name);
+    const topts = (te.topic && !tnames.includes(te.topic) ? [te.topic] : []).concat(tnames);
+    const linked = tops.find((x) => x.name === te.topic && x.microthemeId && findMicrotheme(x.microthemeId));
+    return `<div class="pl-card pl-${t.k}">
+      <div class="pl-track">${t.n}</div>
+      <label class="pl-label">Subject
+        <select class="pl-input" onchange="plSetField('${t.k}','subject',this.value)">
+          <option value="">— none today —</option>
+          ${opts.map((n) => `<option value="${escapeHtml(n)}" ${n === te.subject ? "selected" : ""}>${escapeHtml(n)}</option>`).join("")}
+        </select></label>
+      <label class="pl-label">Topic
+        <select class="pl-input" onchange="plSetField('${t.k}','topic',this.value)" ${topts.length ? "" : "disabled"}>
+          <option value="">${topts.length ? "— pick a topic —" : "No topics added for this subject"}</option>
+          ${topts.map((n) => { const o = tops.find((x) => x.name === n); return `<option value="${escapeHtml(n)}" ${n === te.topic ? "selected" : ""}>${o && o.done ? "✓ " : ""}${escapeHtml(n)}</option>`; }).join("")}
+        </select></label>
+      ${linked ? `<span class="btn small" onclick="openMicrotheme('${linked.microthemeId}')">📖 Open notes</span>` : ""}
+      <label class="pl-label">Target
+        <textarea class="pl-input" rows="3" placeholder="e.g. Class 3 + notes + 1 answer"
+          oninput="plSetField('${t.k}','target',this.value,true)" onblur="plFlushDaySave()">${escapeHtml(te.target)}</textarea></label>
+      <label class="pl-done"><input type="checkbox" ${te.done ? "checked" : ""} onchange="plSetField('${t.k}','done',this.checked)"> Target done</label>
+    </div>`;
+  }).join("");
+}
+
+function plRenderSubjects() {
+  const el = document.getElementById("pl-subjects");
+  if (!el) return;
+  el.innerHTML = PL_TRACKS.map((t) => {
+    const subs = planner.tracks[t.k] || [];
+    const done = subs.filter((s) => s.status === "done").length;
+    return `<div class="pl-card pl-${t.k}">
+      <div class="pl-track">${t.n}</div>
+      <div class="pl-prog"><span>${done} of ${subs.length} done</span><span class="stat-bar pl-bar"><span class="stat-bar-fill" style="width:${subs.length ? (done / subs.length) * 100 : 0}%"></span></span></div>
+      ${subs.length ? `<ol class="pl-subs">${subs.map((s, i) => {
+        const tp = s.topics || [];
+        const td = tp.filter((x) => x.done).length;
+        const open = plOpenTopics.has(s.id);
+        return `<li class="${s.status}">
+          <div class="pl-row">
+            <span class="pl-nm">${escapeHtml(s.name)}</span>
+            <span class="pl-chip ${s.status}" onclick="plCycle('${s.id}')">${s.status === "done" ? "Done" : s.status === "current" ? "Current" : "To do"}</span>
+            ${i > 0 ? `<span class="pl-ic" title="Move up" onclick="plMoveSubject('${s.id}')">↑</span>` : `<span class="pl-ic off">↑</span>`}
+            <span class="pl-ic" title="Remove" onclick="plDeleteSubject('${s.id}')">✕</span>
+          </div>
+          <span class="pl-tgl" onclick="plToggleTopics('${s.id}')">${open ? "▾" : "▸"} Topics <span class="pl-tc">${tp.length ? `${td}/${tp.length}` : "add"}</span></span>
+          ${open ? `<div class="pl-topics">
+            ${tp.length ? `<ul>${tp.map((x, j) => `<li class="${x.done ? "tdone" : ""}">
+              <label><input type="checkbox" ${x.done ? "checked" : ""} onchange="plToggleTopic('${s.id}','${x.id}',this.checked)"> <span>${escapeHtml(x.name)}</span></label>
+              ${x.microthemeId && findMicrotheme(x.microthemeId) ? `<span class="pl-ic" title="Open notes" onclick="openMicrotheme('${x.microthemeId}')">📖</span>` : ""}
+              ${j > 0 ? `<span class="pl-ic" title="Move up" onclick="plMoveTopic('${x.id}')">↑</span>` : ""}
+              <span class="pl-ic" title="Remove" onclick="plDeleteTopic('${x.id}')">✕</span>
+            </li>`).join("")}</ul>` : `<div class="weak-empty">No topics yet.</div>`}
+            <form class="pl-add" onsubmit="event.preventDefault(); plAddTopics('${s.id}', this.elements[0])">
+              <input class="pl-input" type="text" placeholder="Add topic (paste many lines at once)" onpaste="plPasteTopics(event,'${s.id}',this)">
+              <button class="btn small" type="submit">Add</button>
+            </form>
+          </div>` : ""}
+        </li>`;
+      }).join("")}</ol>` : `<div class="weak-empty">No subjects yet. Add the first one below.</div>`}
+      <form class="pl-add" onsubmit="event.preventDefault(); plAddSubject('${t.k}', this.elements[0])">
+        <input class="pl-input" type="text" placeholder="Add subject">
+        <button class="btn small" type="submit">Add</button>
+      </form>
+    </div>`;
+  }).join("");
+}
+
+function plRenderLog() {
+  const el = document.getElementById("pl-log");
+  if (!el) return;
+  const ds = Object.keys(planner.days).filter((d) => plIsLogged(planner.days[d])).sort().reverse();
+  if (!ds.length) { el.innerHTML = `<div class="weak-empty">Nothing logged yet. Fill in today's targets above and they appear here.</div>`; return; }
+  const merged = typeof mergedTimeLog === "function" ? mergedTimeLog() : {};
+  el.innerHTML = `<div class="pl-tbl"><table class="mt-table">
+    <tr><th>Date</th>${PL_TRACKS.map((t) => `<th>${t.n}</th>`).join("")}<th>Note</th><th>Timer</th></tr>
+    ${ds.map((d) => { const e = planner.days[d]; return `<tr>
+      <td class="pl-dt"><a href="#" onclick="event.preventDefault(); plPickDay('${d}'); document.getElementById('pl-day-title').scrollIntoView({behavior:'smooth'})">${plFmt(d)}</a></td>
+      ${PL_TRACKS.map((t) => { const te = (e.tracks || {})[t.k] || {}; return `<td>${te.target ? escapeHtml(te.target) : `<span class="pl-s">—</span>`}
+        ${te.subject ? `<span class="pl-s">${escapeHtml(te.subject)}${te.topic ? " · " + escapeHtml(te.topic) : ""}</span>` : ""}
+        ${te.done ? `<span class="pl-ok">✓ done</span>` : ""}</td>`; }).join("")}
+      <td>${escapeHtml(e.note || "")}</td>
+      <td>${plMinutes(merged[d] || 0) || `<span class="pl-s">—</span>`}</td>
+    </tr>`; }).join("")}
+  </table></div>`;
+}
+
+/* ------------------------------ actions ------------------------------ */
+function plPickDay(v) { if (!v) return; plFlushDaySave(); plDay = v; plRenderDay(); }
+function plSetNote(v) { plEntry(plDay).note = v; plQueueDaySave(); }
+function plSetField(track, field, value, typing) {
+  const te = plEntry(plDay).tracks[track];
+  te[field] = value;
+  if (field === "subject") te.topic = "";
+  plQueueDaySave();
+  if (!typing && (field === "subject" || field === "topic")) plRenderDay();
+}
+function plSetDate(key, value) {
+  planner.settings[key] = value;
+  api("PATCH", "/api/planner/settings", { [key]: value }).then(plRenderStats);
+}
+function plCycle(id) {
+  const s = plFindSubject(id); if (!s) return;
+  const next = s.status === "todo" ? "current" : s.status === "current" ? "done" : "todo";
+  api("PATCH", `/api/planner/subjects/${id}`, { status: next }).then(plReload);
+}
+function plMoveSubject(id) { api("POST", `/api/planner/subjects/${id}/move-up`).then(plReload); }
+function plDeleteSubject(id) {
+  const s = plFindSubject(id); if (!s) return;
+  if (!confirm(`Remove "${s.name}" and its ${(s.topics || []).length} topics from the plan?\n\nYour notes for it stay in NotesVerse, and days already logged keep their text.`)) return;
+  api("DELETE", `/api/planner/subjects/${id}`).then(plReload);
+}
+function plAddSubject(track, input) {
+  const v = input.value.trim(); if (!v) return;
+  api("POST", "/api/planner/subjects", { track, name: v }).then(plReload);
+}
+function plToggleTopics(id) { plOpenTopics.has(id) ? plOpenTopics.delete(id) : plOpenTopics.add(id); plRenderSubjects(); }
+function plAddTopics(subjectId, input) {
+  const names = input.value.split(/\n/).map((x) => x.trim()).filter(Boolean);
+  if (!names.length) return;
+  api("POST", `/api/planner/subjects/${subjectId}/topics`, { names }).then(plReload);
+}
+function plPasteTopics(ev, subjectId, input) {
+  const txt = (ev.clipboardData && ev.clipboardData.getData("text")) || "";
+  if (!txt.includes("\n")) return;
+  ev.preventDefault();
+  input.value = txt;
+  plAddTopics(subjectId, input);
+}
+function plToggleTopic(subjectId, topicId, done) {
+  const s = plFindSubject(subjectId);
+  const x = s && s.topics.find((t) => t.id === topicId);
+  if (x) x.done = done;
+  // Ticking a linked topic records a revision, so refresh the Due count too.
+  api("PATCH", `/api/planner/topics/${topicId}`, { done }).then(plReload);
+}
+function plMoveTopic(id) { api("POST", `/api/planner/topics/${id}/move-up`).then(plReload); }
+function plDeleteTopic(id) { api("DELETE", `/api/planner/topics/${id}`).then(plReload); }
