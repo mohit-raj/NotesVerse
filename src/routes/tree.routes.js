@@ -77,12 +77,13 @@ router.get("/tree", (req, res) => {
           .map((a) => ({ id: a.id, filename: a.filename, originalName: a.original_name, mimeType: a.mime_type }));
 
         return {
-          id: mt.id, name: mt.name, tag: mt.tag,
+          id: mt.id, name: mt.name, tag: mt.tag, topicId: mt.topic_id || null,
           quotes, summary, people, sections, pyqs, aspects, revisions, timeLog, attachments
         };
       });
 
-    return { id: subj.id, name: subj.name, microthemes };
+    const topics = db.prepare("SELECT id,name FROM subject_topics WHERE subject_id=? ORDER BY sort_order, name").all(subj.id);
+    return { id: subj.id, name: subj.name, topics, microthemes };
   });
 
   res.json(out);

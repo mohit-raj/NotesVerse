@@ -26,15 +26,24 @@ if (!aspectCols.includes("last_recall")) {
   db.exec("ALTER TABLE aspects ADD COLUMN last_recall TEXT DEFAULT ''");
 }
 
-/* --- Micro Plan: link plan subjects to notes subjects (added later) --- */
-const planSubjCols = db.prepare("PRAGMA table_info(plan_subjects)").all().map((c) => c.name);
-if (!planSubjCols.includes("note_subject_id")) {
-  db.exec("ALTER TABLE plan_subjects ADD COLUMN note_subject_id TEXT REFERENCES subjects(id) ON DELETE SET NULL");
-}
+/* --- notes: microthemes can sit inside a topic (Subject › Topic › microtheme) --- */
+const mtCols = db.prepare("PRAGMA table_info(microthemes)").all().map((c) => c.name);
+if (!mtCols.includes("topic_id")) db.exec("ALTER TABLE microthemes ADD COLUMN topic_id TEXT REFERENCES subject_topics(id) ON DELETE SET NULL");
 
-/* --- Micro Plan: first-run starter subjects/topics, then link them to notes --- */
+/* --- Micro Plan: columns that link plan items to the notes tree (added later) --- */
+const planSubjCols = db.prepare("PRAGMA table_info(plan_subjects)").all().map((c) => c.name);
+if (!planSubjCols.includes("note_subject_id")) db.exec("ALTER TABLE plan_subjects ADD COLUMN note_subject_id TEXT REFERENCES subjects(id) ON DELETE SET NULL");
+if (!planSubjCols.includes("note_mode")) db.exec("ALTER TABLE plan_subjects ADD COLUMN note_mode TEXT");
+if (!planSubjCols.includes("note_microtheme_id")) db.exec("ALTER TABLE plan_subjects ADD COLUMN note_microtheme_id TEXT REFERENCES microthemes(id) ON DELETE SET NULL");
+if (!planSubjCols.includes("note_topic_id")) db.exec("ALTER TABLE plan_subjects ADD COLUMN note_topic_id TEXT REFERENCES subject_topics(id) ON DELETE SET NULL");
+const planTopicCols = db.prepare("PRAGMA table_info(plan_topics)").all().map((c) => c.name);
+if (!planTopicCols.includes("section_id")) db.exec("ALTER TABLE plan_topics ADD COLUMN section_id TEXT REFERENCES sections(id) ON DELETE SET NULL");
+// Links made by the earlier two-way version were subject-level.
+db.exec("UPDATE plan_subjects SET note_mode='subject' WHERE note_subject_id IS NOT NULL AND note_mode IS NULL");
+
+/* --- Micro Plan: first-run starter subjects/topics --- */
 require("./planner-seed").seedPlanner(db);
-// reset-notes.js sets NV_SKIP_SYNC so it sees the notes exactly as they were.
-if (!process.env.NV_SKIP_SYNC) require("./planner-sync").backfill(db);
+/* --- Micro Plan: move an earlier layout (subtopics as sections) to topics --- */
+require("./planner-sync").migrateToTopics(db);
 
 module.exports = db;

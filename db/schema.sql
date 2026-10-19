@@ -6,6 +6,15 @@ CREATE TABLE IF NOT EXISTS subjects (
   sort_order INTEGER DEFAULT 0
 );
 
+-- Optional middle level: Subject › Topic › microtheme (notes page),
+-- e.g. GS3 › Internal Security › Left Wing Extremism.
+CREATE TABLE IF NOT EXISTS subject_topics (
+  id TEXT PRIMARY KEY,
+  subject_id TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  sort_order INTEGER DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS microthemes (
   id TEXT PRIMARY KEY,
   subject_id TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
@@ -126,12 +135,15 @@ CREATE TABLE IF NOT EXISTS plan_subjects (
   name TEXT NOT NULL,
   status TEXT DEFAULT 'todo',      -- todo | current | done
   done_on TEXT DEFAULT '',
-  note_subject_id TEXT REFERENCES subjects(id) ON DELETE SET NULL,
+  note_subject_id TEXT REFERENCES subjects(id) ON DELETE SET NULL,      -- which notes subject it goes under
+  note_mode TEXT,                                                       -- 'subject' | 'topic' (see db/planner-sync.js)
+  note_topic_id TEXT REFERENCES subject_topics(id) ON DELETE SET NULL,  -- 'topic' mode: the notes topic it is
+  note_microtheme_id TEXT REFERENCES microthemes(id) ON DELETE SET NULL, -- used by an earlier version only
   sort_order INTEGER DEFAULT 0
 );
 
--- microtheme_id links a plan topic to its microtheme in the notes tree
--- (kept in sync by db/planner-sync.js).
+-- A plan subtopic is a microtheme (notes page); kept in sync both ways
+-- by db/planner-sync.js.
 CREATE TABLE IF NOT EXISTS plan_topics (
   id TEXT PRIMARY KEY,
   subject_id TEXT NOT NULL REFERENCES plan_subjects(id) ON DELETE CASCADE,
@@ -139,6 +151,7 @@ CREATE TABLE IF NOT EXISTS plan_topics (
   done INTEGER DEFAULT 0,
   done_on TEXT DEFAULT '',
   microtheme_id TEXT REFERENCES microthemes(id) ON DELETE SET NULL,
+  section_id TEXT REFERENCES sections(id) ON DELETE SET NULL,          -- used by an earlier version only
   sort_order INTEGER DEFAULT 0
 );
 

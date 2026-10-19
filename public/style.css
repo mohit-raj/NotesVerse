@@ -470,7 +470,6 @@ ol.pl-subs>li.done .pl-nm{color:var(--muted); text-decoration:line-through;}
 .pl-topics label{flex:1; min-width:0; display:flex; gap:6px; align-items:flex-start; cursor:pointer; overflow-wrap:break-word;}
 .pl-topics input[type=checkbox]{margin-top:2px;}
 .pl-topics li.tdone span{color:var(--muted); text-decoration:line-through;}
-.pl-link{font-size:12.5px;}
 .pl-add{display:flex; gap:6px;}
 .pl-add .pl-input{flex:1; min-width:0;}
 .pl-tbl{overflow-x:auto;}
@@ -480,3 +479,20 @@ ol.pl-subs>li.done .pl-nm{color:var(--muted); text-decoration:line-through;}
 .pl-s{display:block; font-size:11.5px; color:var(--muted);}
 .pl-ok{display:block; font-size:12px; color:var(--green); font-weight:700;}
 .pl-dates{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,260px)); gap:12px; margin-bottom:30px;}
+
+.pl-meta{gap:10px; flex-wrap:wrap;}
+.pl-path{font-size:11.5px; color:var(--muted); min-width:0; overflow-wrap:break-word;}
+.pl-path.pl-link{cursor:pointer; color:var(--navy-2);}
+.pl-path.pl-link:hover{text-decoration:underline;}
+.pl-add-subj{flex-wrap:wrap;}
+.pl-add-subj select.pl-input{flex:1 1 100%; order:2; font-size:12px; padding:4px 6px;}
+.pl-add-subj button{order:1;}
+
+/* ---------- Topic folders in the sidebar (Subject › Topic › page) ---------- */
+.nav-topic{display:flex; align-items:center; justify-content:space-between; gap:6px; padding:4px 16px 4px 30px; font-family:-apple-system,sans-serif; font-size:13px;}
+.nav-topic-name{cursor:pointer; font-weight:600; color:var(--navy); min-width:0; overflow-wrap:break-word;}
+.nav-topic-count{font-weight:400; color:var(--muted); font-size:11.5px; margin-left:2px;}
+.nav-topic .nav-subject-btns{opacity:.55;}
+.nav-topic:hover .nav-subject-btns{opacity:1;}
+.nav-mt.nav-mt-in{padding-left:46px;}
+.nav-mt.nav-empty{color:var(--muted); font-style:italic; cursor:default; font-size:12.5px;}

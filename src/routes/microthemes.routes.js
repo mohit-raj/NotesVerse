@@ -6,17 +6,19 @@ const sync = require("../../db/planner-sync");
 const router = express.Router();
 
 router.post("/microthemes", (req, res) => {
-  const { subjectId, name, tag } = req.body;
+  const { subjectId, name, tag, topicId } = req.body;
   if (!subjectId || !name) return res.status(400).json({ error: "subjectId and name required" });
   const id = uid();
   const maxOrder = db
     .prepare("SELECT COALESCE(MAX(sort_order),0) m FROM microthemes WHERE subject_id=?")
     .get(subjectId).m;
-  db.prepare("INSERT INTO microthemes (id,subject_id,name,tag,sort_order) VALUES (?,?,?,?,?)")
-    .run(id, subjectId, name, tag || "", maxOrder + 1);
+  // topicId (optional) puts the page inside a topic: Subject › Topic › page.
+  const topic = topicId ? db.prepare("SELECT id FROM subject_topics WHERE id=? AND subject_id=?").get(topicId, subjectId) : null;
+  db.prepare("INSERT INTO microthemes (id,subject_id,topic_id,name,tag,sort_order) VALUES (?,?,?,?,?,?)")
+    .run(id, subjectId, topic ? topic.id : null, name, tag || "", maxOrder + 1);
   db.prepare("INSERT INTO sections (id,microtheme_id,title,starred,sort_order) VALUES (?,?,?,0,0)")
     .run(uid(), id, "Basics");
-  sync.onMicrothemeCreated(db, id); // adds it as a topic in the Micro Plan if its subject is there
+  sync.onPageCreated(db, id); // shows up as a subtopic in the Micro Plan
   res.json({ id });
 });
 
@@ -24,14 +26,17 @@ router.patch("/microthemes/:id", (req, res) => {
   const { name, tag } = req.body;
   if (name !== undefined) {
     db.prepare("UPDATE microthemes SET name=? WHERE id=?").run(name, req.params.id);
-    sync.onMicrothemeRenamed(db, req.params.id, name);
+    sync.onPageRenamed(db, req.params.id, name);
   }
   if (tag !== undefined) db.prepare("UPDATE microthemes SET tag=? WHERE id=?").run(tag, req.params.id);
   res.json({ ok: true });
 });
 
 router.delete("/microthemes/:id", (req, res) => {
-  db.prepare("DELETE FROM microthemes WHERE id=?").run(req.params.id);
+  db.transaction(() => {
+    sync.beforePageDeleted(db, req.params.id);
+    db.prepare("DELETE FROM microthemes WHERE id=?").run(req.params.id);
+  })();
   res.json({ ok: true });
 });
 

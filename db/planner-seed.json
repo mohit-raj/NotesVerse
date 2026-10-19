@@ -1,4 +1,13 @@
 {
+ "noteSubjects": [
+  "GS1",
+  "GS2",
+  "GS3",
+  "GS4 — Ethics",
+  "Essay",
+  "Anthropology Paper 1",
+  "Anthropology Paper 2"
+ ],
  "settings": {
   "examDate": "2027-05-23",
   "mainsDate": "2027-01-31"
@@ -92,93 +101,19 @@
    {
     "name": "Ethics GS4",
     "status": "current",
-    "topics": [
-     "Ethics & human interface: essence, determinants, consequences, dimensions",
-     "Ethics in private and public relationships",
-     "Human values: lessons from leaders, reformers, administrators; role of family, society, education",
-     "Attitude: content, structure, function; link with thought and behaviour",
-     "Moral and political attitudes; social influence and persuasion",
-     "Aptitude & foundational values: integrity, impartiality, non-partisanship, objectivity, dedication, empathy, tolerance, compassion",
-     "Emotional intelligence: concepts, uses in administration and governance",
-     "Moral thinkers and philosophers: India and world",
-     "Civil service values and ethics in public administration",
-     "Ethical concerns and dilemmas in government and private institutions",
-     "Laws, rules, regulations and conscience as sources of ethical guidance",
-     "Accountability and ethical governance; strengthening moral values in governance",
-     "Ethics in international relations and funding; corporate governance",
-     "Probity in governance: concept, philosophical basis",
-     "Information sharing, transparency, RTI",
-     "Codes of ethics and conduct, citizen's charters, work culture, service delivery",
-     "Use of public funds; challenges of corruption",
-     "Case studies"
-    ]
+    "topics": []
    }
   ],
   "optional": [
    {
     "name": "Anthropology Paper 1",
     "status": "current",
-    "topics": [
-     "1.1 Meaning, scope and development of anthropology",
-     "1.2 Relationship with other disciplines",
-     "1.3 Main branches, scope and relevance",
-     "1.4 Human evolution and emergence of man",
-     "1.5 Primates: characteristics, evolutionary trends, taxonomy",
-     "1.6 Fossil hominids: phylogeny, features, distribution",
-     "1.7 Biological basis of life",
-     "1.8 Prehistoric archaeology; cultural evolution",
-     "2.1 Nature of culture",
-     "2.2 Nature of society",
-     "2.3 Marriage",
-     "2.4 Family",
-     "2.5 Kinship",
-     "3 Economic organisation",
-     "4 Political organisation and social control",
-     "5 Religion",
-     "6 Anthropological theories",
-     "7 Culture, language and communication",
-     "8 Research methods",
-     "9.1 Human genetics: methods and application",
-     "9.2 Mendelian genetics in man",
-     "9.3 Genetic polymorphism, selection, Hardy-Weinberg",
-     "9.4 Chromosomes and chromosomal aberrations",
-     "9.5 Race and racism",
-     "9.6 Age, sex, population variation; genetic markers",
-     "9.7 Ecological anthropology",
-     "9.8 Epidemiological anthropology",
-     "10 Human growth and development",
-     "11 Demography: fertility, mortality, migration",
-     "12 Applications of anthropology"
-    ]
+    "topics": []
    },
    {
     "name": "Anthropology Paper 2",
     "status": "todo",
-    "topics": [
-     "1.1 Indian culture and civilisation: prehistoric to protohistoric",
-     "1.2 Palaeo-anthropological evidence from India",
-     "1.3 Ethno-archaeology in India",
-     "2 Demographic profile of India",
-     "3.1 Traditional Indian social system",
-     "3.2 Caste system in India",
-     "3.3 Sacred complex; nature-man-spirit complex",
-     "3.4 Impact of Buddhism, Jainism, Islam, Christianity on Indian society",
-     "4 Anthropology in India; Indian anthropologists",
-     "5.1 Indian village",
-     "5.2 Linguistic and religious minorities",
-     "5.3 Processes of socio-cultural change",
-     "6.1 Tribal situation in India",
-     "6.2 Problems of tribal communities",
-     "6.3 Development projects and tribal displacement",
-     "7.1 Exploitation of SC/ST/OBC; constitutional safeguards",
-     "7.2 Social change and contemporary tribal societies",
-     "7.3 Ethnicity, ethnic conflicts, tribal movements",
-     "8.1 Impact of religions on tribal societies",
-     "8.2 Tribe and nation state",
-     "9.1 Tribal administration, policies, PVTGs, role of NGOs",
-     "9.2 Anthropology in tribal and rural development",
-     "9.3 Anthropology and regionalism, communalism, ethnic movements"
-    ]
+    "topics": []
    }
   ]
  }

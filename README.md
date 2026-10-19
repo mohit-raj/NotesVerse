@@ -44,7 +44,8 @@ notesverse/
 │   │   ├── attachments.routes.js # Uploaded images/PDFs
 │   │   ├── notes.routes.js       # Sidebar to-do sticky note
 │   │   ├── chat.routes.js        # Gemini AI relay
-│   │   └── planner.routes.js     # Micro Plan: subjects, topics, daily targets
+│   │   ├── planner.routes.js     # Micro Plan: subjects, subtopics, daily targets
+│   │   └── topics.routes.js      # Topic folders: Subject › Topic › page
 │   └── utils/
 │       ├── id.js              # uid() — random ID generation
 │       └── files.js           # File-extension detection for uploads
@@ -55,7 +56,7 @@ notesverse/
 │   ├── seed.js                  # One-time structure + worked example
 │   ├── planner-seed.js          # First-run starter lists for the Micro Plan
 │   ├── planner-seed.json        # …the lists themselves (edit before first run)
-│   ├── planner-sync.js          # Keeps Micro Plan ⇄ notes subjects/microthemes in sync
+│   ├── planner-sync.js          # Keeps Micro Plan subtopics and notes pages in sync
 │   ├── reset-notes.js           # `npm run reset-notes` — empty the notes tree
 │   ├── backup.js                # `npm run backup` — manual snapshot
 │   └── vault.sqlite3            # Your real data (gitignored)
@@ -133,7 +134,8 @@ npm start
 Open the printed `http://localhost:3000` in your browser.
 
 ## 6. Use it
-- Left sidebar: pick a subject/microtheme, tick off aspects as you memorise
+- Left sidebar: subjects hold optional topic folders (📁 adds one) and
+  notes pages (＋ adds one, inside a folder or directly). Pick a page, tick off aspects as you memorise
   them, hit **Mark revised** after each revision pass. A pale-yellow sticky
   note below the subject list is a persistent to-do — click it to edit.
 - Top bar: streak, due count, mastery %, **Skeleton**/**Test me** (active
@@ -159,26 +161,32 @@ Open the printed `http://localhost:3000` in your browser.
   flexible daily-targets tracker with four tracks — Prelims, GS mains,
   Ethics GS4 and Optional.
   - Each track has an ordered list of subjects (To do → Current → Done)
-    and each subject can hold topics. Paste many lines into "Add topic" to
-    add them all at once.
-  - **Synced with your notes:** a plan subject is a notes subject and a
-    plan topic is a microtheme (same name). Adding either in the plan
-    creates or links it in the notes, and adding a microtheme under a
-    subject that's in the plan adds it as a topic there. Renames carry
-    across both ways. Deletes never cross over, so removing something from
-    the plan keeps your notes. Each topic has a 📖 button to open its
-    notes, and ticking a topic done records a revision for today.
-  - Every day you pick subject + topic, write the target, and tick it when
-    done; there's a note per day. Pick any date to view or edit that day.
+    and each subject holds subtopics. Paste many lines into "Add subtopic"
+    to add them all at once.
+  - **Same layers as your notes:** notes are Subject › Topic › page
+    (e.g. GS3 › Internal Security › Left Wing Extremism). A plan subject
+    such as "GS3 · Internal Security" is that notes topic, and each of its
+    subtopics is a notes page in it — the same list on both sides: add,
+    rename or delete a subtopic in the plan or a page in the notes and the
+    other side follows. 📖 on a subtopic opens its page. Deleting a
+    subtopic warns you if anything is written in its page.
+  - A plan subject whose name matches a notes subject (plan "Ethics GS4" =
+    notes "GS4 — Ethics") uses the pages directly under that subject.
+  - The plan is what you're targeting now, the notes hold the whole
+    syllabus: a new notes topic doesn't become a plan subject, and
+    removing a plan subject keeps its notes. Pick or change where a plan
+    subject goes under ▸ Subtopics → "Goes in notes under".
+  - Ticking a subtopic done marks its page revised.
   - Hours shown for a day come from the study timer — there is no second
     hours field. The sticky note stays your undated scratchpad.
   - Countdown to prelims and to your mains target date (editable at the
     bottom), days logged, and subjects done.
   - Starter lists come from `db/planner-seed.json` on first run only.
 - **Start your notes fresh:** stop the server and run `npm run reset-notes`.
-  It backs up the vault, removes every notes subject and microtheme (with
-  their content), keeps the Micro Plan, and the next `npm start` re-creates
-  the plan's subjects and topics as empty notes.
+  It backs up the vault, removes every notes subject, topic and page (with
+  their content), creates the empty standard subjects listed under
+  `noteSubjects` in `db/planner-seed.json`, clears the plan's subtopics,
+  and adds each plan subject as an empty topic folder in the notes.
 
 ## How spaced repetition works here
 Every time you click **Mark revised** (or grade an aspect Good/Easy), the app

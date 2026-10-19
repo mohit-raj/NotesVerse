@@ -11,12 +11,17 @@ router.post("/subjects", (req, res) => {
   const id = uid();
   const maxOrder = db.prepare("SELECT COALESCE(MAX(sort_order),0) m FROM subjects").get().m;
   db.prepare("INSERT INTO subjects (id,name,sort_order) VALUES (?,?,?)").run(id, name, maxOrder + 1);
-  sync.onNoteSubjectCreated(db, id); // links a plan subject with the same name
+  // Plan subjects not in the notes yet may belong here (e.g. a new "GS4").
+  db.prepare("SELECT id FROM plan_subjects WHERE note_subject_id IS NULL").all()
+    .forEach((s) => { if (sync.defaultTarget(db, db.prepare("SELECT * FROM plan_subjects WHERE id=?").get(s.id)) === id) sync.setTarget(db, s.id, id); });
   res.json({ id });
 });
 
 router.delete("/subjects/:id", (req, res) => {
-  db.prepare("DELETE FROM subjects WHERE id=?").run(req.params.id);
+  db.transaction(() => {
+    sync.beforeNoteSubjectDeleted(db, req.params.id);
+    db.prepare("DELETE FROM subjects WHERE id=?").run(req.params.id);
+  })();
   res.json({ ok: true });
 });
 

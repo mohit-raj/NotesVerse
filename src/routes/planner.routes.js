@@ -27,8 +27,10 @@ router.get("/planner", (req, res) => {
     if (!tracks[s.track]) return;
     tracks[s.track].push({
       id: s.id, name: s.name, status: s.status, doneOn: s.done_on || "",
+      noteSubjectId: s.note_subject_id || null, noteMode: s.note_mode || null, noteTopicId: s.note_topic_id || null,
       topics: topicStmt.all(s.id).map((t) => ({
-        id: t.id, name: t.name, done: !!t.done, doneOn: t.done_on || "", microthemeId: t.microtheme_id || null
+        id: t.id, name: t.name, done: !!t.done, doneOn: t.done_on || "",
+        microthemeId: t.microtheme_id || null
       }))
     });
   });
@@ -42,7 +44,8 @@ router.get("/planner", (req, res) => {
     days[e.date].tracks[e.track] = { subject: e.subject || "", topic: e.topic || "", target: e.target || "", done: !!e.done };
   });
 
-  res.json({ settings, tracks, days });
+  const noteSubjects = db.prepare("SELECT id,name FROM subjects ORDER BY sort_order, name").all();
+  res.json({ settings, tracks, days, noteSubjects });
 });
 
 /* ---------- dates (prelims / mains target) ---------- */
@@ -60,13 +63,15 @@ router.patch("/planner/settings", (req, res) => {
 
 /* ---------- subjects ---------- */
 router.post("/planner/subjects", (req, res) => {
-  const { track, name } = req.body;
+  const { track, name, noteSubjectId } = req.body;
   if (!TRACKS.includes(track) || !name || !String(name).trim()) return res.status(400).json({ error: "track and name required" });
   const id = uid();
   const max = db.prepare("SELECT COALESCE(MAX(sort_order),-1) m FROM plan_subjects WHERE track=?").get(track).m;
   db.transaction(() => {
     db.prepare("INSERT INTO plan_subjects (id,track,name,status,sort_order) VALUES (?,?,?, 'todo', ?)").run(id, track, String(name).trim(), max + 1);
-    sync.linkSubject(db, id);
+    // Goes under the notes subject you picked, or the one its name points to.
+    if (noteSubjectId !== undefined) sync.setTarget(db, id, noteSubjectId || null);
+    else sync.assignDefault(db, id);
   })();
   res.json({ id });
 });
@@ -76,6 +81,8 @@ router.patch("/planner/subjects/:id", (req, res) => {
   if (!subj) return res.status(404).json({ error: "not found" });
   const { name, status } = req.body;
   const tx = db.transaction(() => {
+    // Choose which notes subject this goes under ("" = not in notes).
+    if (req.body.noteSubjectId !== undefined) sync.setTarget(db, subj.id, req.body.noteSubjectId || null);
     if (name !== undefined && String(name).trim()) {
       db.prepare("UPDATE plan_subjects SET name=? WHERE id=?").run(String(name).trim(), subj.id);
       sync.onPlanSubjectRenamed(db, subj.id, String(name).trim());
@@ -88,6 +95,13 @@ router.patch("/planner/subjects/:id", (req, res) => {
     }
   });
   try { tx(); } catch (e) { return res.status(400).json({ error: e.message }); }
+  res.json({ ok: true });
+});
+
+// Re-match this subject's subtopics with the notes (both directions).
+router.post("/planner/subjects/:id/push", (req, res) => {
+  if (!db.prepare("SELECT 1 FROM plan_subjects WHERE id=?").get(req.params.id)) return res.status(404).json({ error: "not found" });
+  db.transaction(() => sync.mirror(db, req.params.id))();
   res.json({ ok: true });
 });
 
@@ -130,7 +144,7 @@ router.post("/planner/subjects/:id/topics", (req, res) => {
   db.transaction(() => rows.forEach((r) => {
     const id = uid(); ids.push(id);
     ins.run(id, subj.id, r.name, r.mtId, ++max);
-    sync.linkTopic(db, id); // finds or creates the matching microtheme
+    sync.onPlanTopicAdded(db, id); // adds it to the notes, if the subject is in the notes
   }))();
   res.json({ ids });
 });
@@ -146,9 +160,9 @@ router.patch("/planner/topics/:id", (req, res) => {
     }
     if (done !== undefined) {
       db.prepare("UPDATE plan_topics SET done=?, done_on=? WHERE id=?").run(done ? 1 : 0, done ? localToday() : "", topic.id);
-      // Finishing a topic counts as a revision of its microtheme, which
-      // starts its spaced-repetition schedule. Unticking keeps history.
-      if (done && !topic.done && topic.microtheme_id) sync.markRevised(db, topic.microtheme_id);
+      // Finishing a topic counts as a revision in the notes (see
+      // onTopicDone for the rule). Unticking keeps the history.
+      if (done && !topic.done) sync.onTopicDone(db, topic.id);
     }
   })();
   res.json({ ok: true });
@@ -167,8 +181,19 @@ router.post("/planner/topics/:id/move-up", (req, res) => {
   res.json({ ok: true });
 });
 
+// What deleting this subtopic would remove from the notes (for the warning).
+router.get("/planner/topics/:id/impact", (req, res) => {
+  res.json({ notes: sync.notesForTopic(db, req.params.id) });
+});
+
+// A subtopic is the same thing on both sides, so it goes from the notes too.
 router.delete("/planner/topics/:id", (req, res) => {
-  db.prepare("DELETE FROM plan_topics WHERE id=?").run(req.params.id);
+  const t = db.prepare("SELECT * FROM plan_topics WHERE id=?").get(req.params.id);
+  if (!t) return res.json({ ok: true });
+  db.transaction(() => {
+    db.prepare("DELETE FROM plan_topics WHERE id=?").run(t.id);
+    sync.onPlanTopicDeleted(db, t);
+  })();
   res.json({ ok: true });
 });
 

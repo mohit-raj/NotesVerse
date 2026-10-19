@@ -22,6 +22,7 @@ let ui = {
   timer: JSON.parse(localStorage.getItem("uv_timer") || 'null') || { mtId: null, mtName: "", status: "stopped", studyMs: 0, breakMs: 0, segmentStart: null },
   collapsedSections: JSON.parse(localStorage.getItem("uv_collapsed_sections") || "{}"),
   collapsedSubjects: JSON.parse(localStorage.getItem("uv_collapsed_subjects") || "{}"),
+  collapsedTopics: JSON.parse(localStorage.getItem("uv_collapsed_topics") || "{}"),
   sidebarHidden: localStorage.getItem("uv_sidebar_hidden") === "1"
 };
 
@@ -31,6 +32,7 @@ function saveUiPrefs() {
   if (ui.currentMicrotheme) localStorage.setItem("uv_mt", ui.currentMicrotheme);
   localStorage.setItem("uv_collapsed_sections", JSON.stringify(ui.collapsedSections));
   localStorage.setItem("uv_collapsed_subjects", JSON.stringify(ui.collapsedSubjects));
+  localStorage.setItem("uv_collapsed_topics", JSON.stringify(ui.collapsedTopics));
   localStorage.setItem("uv_sidebar_hidden", ui.sidebarHidden ? "1" : "0");
 }
 function saveTimerState() {
@@ -475,6 +477,11 @@ function isSubjectCollapsed(subjId) {
   const isActiveSubject = active && active.subj.id === subjId;
   return !isActiveSubject; // default: collapsed, except the subject you're currently in
 }
+function isTopicCollapsed(topicId) {
+  if (ui.collapsedTopics[topicId] !== undefined) return ui.collapsedTopics[topicId];
+  const active = findMicrotheme(ui.currentMicrotheme);
+  return !(active && active.mt.topicId === topicId); // default: collapsed, except the topic you're in
+}
 
 /* ============================= RENDER: SIDEBAR ============================= */
 function renderSidebar() {
@@ -548,16 +555,32 @@ function renderSidebar() {
       <span class="nav-subject-name" onclick="toggleSubjectCollapse('${subj.id}')">📗 ${escapeHtml(subj.name)}</span>
       <span class="nav-subject-btns">
         <span class="sq-btn" onclick="toggleSubjectCollapse('${subj.id}')" title="${collapsed ? "Expand" : "Collapse"}">${collapsed ? "+" : "−"}</span>
-        <span class="sq-btn" onclick="addMicrotheme('${subj.id}')" title="Add microtheme">＋</span>
+        <span class="sq-btn" onclick="addTopic('${subj.id}')" title="Add topic (a folder for notes pages)">📁</span>
+        <span class="sq-btn" onclick="addMicrotheme('${subj.id}')" title="Add notes page">＋</span>
       </span>
     </div>`;
     if (!collapsed) {
-      subj.microthemes.forEach((m) => {
+      const navMt = (m, inTopic) => {
         const active = ui.currentView === "microtheme" && m.id === ui.currentMicrotheme;
-        html += `<div class="nav-mt ${active ? "active" : ""}" onclick="openMicrotheme('${m.id}')">
+        return `<div class="nav-mt ${inTopic ? "nav-mt-in" : ""} ${active ? "active" : ""}" onclick="openMicrotheme('${m.id}')">
           ${isDue(m) ? "🔸 " : ""}${escapeHtml(m.name)}
         </div>`;
+      };
+      const topicIds = new Set((subj.topics || []).map((t) => t.id));
+      (subj.topics || []).forEach((t) => {
+        const tc = isTopicCollapsed(t.id);
+        const pages = subj.microthemes.filter((m) => m.topicId === t.id);
+        html += `<div class="nav-topic" id="nav-topic-${t.id}">
+          <span class="nav-topic-name" onclick="toggleTopicCollapse('${t.id}')">${tc ? "▸" : "▾"} ${escapeHtml(t.name)} <span class="nav-topic-count">${pages.length}</span></span>
+          <span class="nav-subject-btns">
+            <span class="sq-btn" onclick="addMicrotheme('${subj.id}','${t.id}')" title="Add notes page in this topic">＋</span>
+            <span class="sq-btn" onclick="renameTopic('${t.id}')" title="Rename topic">✎</span>
+            <span class="sq-btn" onclick="deleteTopic('${t.id}')" title="Delete topic (its pages are kept)">✕</span>
+          </span>
+        </div>`;
+        if (!tc) html += pages.map((m) => navMt(m, true)).join("") || `<div class="nav-mt nav-mt-in nav-empty">No pages yet — click ＋</div>`;
       });
+      subj.microthemes.filter((m) => !m.topicId || !topicIds.has(m.topicId)).forEach((m) => { html += navMt(m, false); });
     }
   });
   html += `<div class="nav-add" style="padding-left:16px;" onclick="addSubject()">+ Add subject</div>`;
@@ -1150,7 +1173,7 @@ function renderTimerWidget() {
 setInterval(() => { if (ui.timer.status !== "stopped") renderTimerWidget(); }, 1000);
 
 function deleteMicrotheme(mtId) {
-  if (!confirm("Delete this microtheme permanently?")) return;
+  if (!confirm("Delete this notes page permanently?\n\nIf it is a subtopic in your Micro Plan, it is removed there too.")) return;
   api("DELETE", `/api/microthemes/${mtId}`).then(async () => {
     await refreshTree();
     const rem = allMicrothemes();
@@ -1164,11 +1187,11 @@ function addSubject() {
   const t = prompt("Subject name (e.g. Polity, Economy, Geography):");
   if (t) mutate("POST", "/api/subjects", { name: t });
 }
-function addMicrotheme(subjectId) {
-  const t = prompt("Microtheme name:");
+function addMicrotheme(subjectId, topicId) {
+  const t = prompt("Notes page name:");
   if (!t) return;
   const tag = prompt("Exam tag (e.g. UPSC GS Mains · GS3):", "");
-  api("POST", "/api/microthemes", { subjectId, name: t, tag }).then(async ({ id }) => {
+  api("POST", "/api/microthemes", { subjectId, topicId: topicId || null, name: t, tag }).then(async ({ id }) => {
     await refreshTree();
     ui.currentMicrotheme = id;
     ui.currentView = "microtheme";
@@ -1235,6 +1258,36 @@ function setRecallQuality(mtId, aspectId, quality) {
 }
 
 /* --- collapse toggles --- */
+function findTopic(topicId) {
+  for (const s of tree) for (const t of s.topics || []) if (t.id === topicId) return { topic: t, subj: s };
+  return null;
+}
+function addTopic(subjectId) {
+  const t = prompt("Topic name (a folder for notes pages, e.g. Internal Security):");
+  if (t && t.trim()) {
+    ui.collapsedSubjects[subjectId] = false;
+    saveUiPrefs();
+    mutate("POST", "/api/subject-topics", { subjectId, name: t.trim() });
+  }
+}
+function renameTopic(topicId) {
+  const f = findTopic(topicId);
+  const t = prompt("Topic name:", f ? f.topic.name : "");
+  if (t && t.trim()) mutate("PATCH", `/api/subject-topics/${topicId}`, { name: t.trim() });
+}
+function deleteTopic(topicId) {
+  const f = findTopic(topicId);
+  if (!f) return;
+  const n = f.subj.microthemes.filter((m) => m.topicId === topicId).length;
+  if (confirm(`Delete the topic "${f.topic.name}"?\n\n${n ? `Its ${n} notes page${n === 1 ? "" : "s"} are kept and move up under ${f.subj.name}.` : "It has no pages."}\nIf it is a subject in your Micro Plan, that subject stops syncing with the notes.`)) {
+    mutate("DELETE", `/api/subject-topics/${topicId}`);
+  }
+}
+function toggleTopicCollapse(topicId) {
+  ui.collapsedTopics[topicId] = !isTopicCollapsed(topicId);
+  saveUiPrefs();
+  renderSidebar();
+}
 function toggleSubjectCollapse(subjId) {
   ui.collapsedSubjects[subjId] = !isSubjectCollapsed(subjId);
   saveUiPrefs();

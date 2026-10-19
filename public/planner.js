@@ -5,9 +5,9 @@
    Re-uses what NotesVerse already has instead of duplicating it:
    - hours studied for a day come from the existing study timer
      (mergedTimeLog), not a second hours field
-   - subjects and topics stay in sync with the notes tree (subjects and
-     microthemes) — see db/planner-sync.js; each topic gets an 📖 Open
-     notes jump, and ticking it done records a revision
+   - notes are Subject › Topic › page; a plan subject is a notes topic
+     (e.g. GS3 › Internal Security) and each of its subtopics is a notes
+     page, the same list on both sides — see db/planner-sync.js
    - theme, auth, backups and the api()/escapeHtml() helpers are shared
    The sidebar sticky note stays the undated scratchpad; the day note
    here is tied to a date.
@@ -177,9 +177,9 @@ function plRenderDay() {
           <option value="">— none today —</option>
           ${opts.map((n) => `<option value="${escapeHtml(n)}" ${n === te.subject ? "selected" : ""}>${escapeHtml(n)}</option>`).join("")}
         </select></label>
-      <label class="pl-label">Topic
+      <label class="pl-label">Subtopic
         <select class="pl-input" onchange="plSetField('${t.k}','topic',this.value)" ${topts.length ? "" : "disabled"}>
-          <option value="">${topts.length ? "— pick a topic —" : "No topics added for this subject"}</option>
+          <option value="">${topts.length ? "— pick a subtopic —" : "No subtopics yet"}</option>
           ${topts.map((n) => { const o = tops.find((x) => x.name === n); return `<option value="${escapeHtml(n)}" ${n === te.topic ? "selected" : ""}>${o && o.done ? "✓ " : ""}${escapeHtml(n)}</option>`; }).join("")}
         </select></label>
       ${linked ? `<span class="btn small" onclick="openMicrotheme('${linked.microthemeId}')">📖 Open notes</span>` : ""}
@@ -211,27 +211,64 @@ function plRenderSubjects() {
             ${i > 0 ? `<span class="pl-ic" title="Move up" onclick="plMoveSubject('${s.id}')">↑</span>` : `<span class="pl-ic off">↑</span>`}
             <span class="pl-ic" title="Remove" onclick="plDeleteSubject('${s.id}')">✕</span>
           </div>
-          <span class="pl-tgl" onclick="plToggleTopics('${s.id}')">${open ? "▾" : "▸"} Topics <span class="pl-tc">${tp.length ? `${td}/${tp.length}` : "add"}</span></span>
+          <div class="pl-row pl-meta">
+            <span class="pl-tgl" onclick="plToggleTopics('${s.id}')">${open ? "▾" : "▸"} Subtopics <span class="pl-tc">${tp.length ? `${td}/${tp.length}` : "add"}</span></span>
+            ${plNotePathHtml(s)}
+          </div>
           ${open ? `<div class="pl-topics">
+            <label class="pl-label">Goes in notes under
+              <select class="pl-input" onchange="plSetNoteTarget('${s.id}', this.value)">
+                <option value="">— not in notes —</option>
+                ${(planner.noteSubjects || []).map((n) => `<option value="${n.id}" ${n.id === s.noteSubjectId ? "selected" : ""}>${escapeHtml(n.name)}</option>`).join("")}
+              </select></label>
+            ${s.noteSubjectId && tp.some((x) => !x.microthemeId) ? `<span class="btn small" onclick="plPush('${s.id}')">↻ Match ${tp.filter((x) => !x.microthemeId).length} with notes</span>` : ""}
             ${tp.length ? `<ul>${tp.map((x, j) => `<li class="${x.done ? "tdone" : ""}">
               <label><input type="checkbox" ${x.done ? "checked" : ""} onchange="plToggleTopic('${s.id}','${x.id}',this.checked)"> <span>${escapeHtml(x.name)}</span></label>
               ${x.microthemeId && findMicrotheme(x.microthemeId) ? `<span class="pl-ic" title="Open notes" onclick="openMicrotheme('${x.microthemeId}')">📖</span>` : ""}
               ${j > 0 ? `<span class="pl-ic" title="Move up" onclick="plMoveTopic('${x.id}')">↑</span>` : ""}
               <span class="pl-ic" title="Remove" onclick="plDeleteTopic('${x.id}')">✕</span>
-            </li>`).join("")}</ul>` : `<div class="weak-empty">No topics yet.</div>`}
+            </li>`).join("")}</ul>` : `<div class="weak-empty">No subtopics yet.${s.noteSubjectId ? " Add them here or in your notes; both stay the same." : ""}</div>`}
             <form class="pl-add" onsubmit="event.preventDefault(); plAddTopics('${s.id}', this.elements[0])">
-              <input class="pl-input" type="text" placeholder="Add topic (paste many lines at once)" onpaste="plPasteTopics(event,'${s.id}',this)">
+              <input class="pl-input" type="text" placeholder="Add subtopic (paste many lines at once)" onpaste="plPasteTopics(event,'${s.id}',this)">
               <button class="btn small" type="submit">Add</button>
             </form>
           </div>` : ""}
         </li>`;
       }).join("")}</ol>` : `<div class="weak-empty">No subjects yet. Add the first one below.</div>`}
-      <form class="pl-add" onsubmit="event.preventDefault(); plAddSubject('${t.k}', this.elements[0])">
-        <input class="pl-input" type="text" placeholder="Add subject">
+      <form class="pl-add pl-add-subj" onsubmit="event.preventDefault(); plAddSubject('${t.k}', this.elements[0], this.elements[1])">
+        <input class="pl-input" type="text" placeholder="Add topic, e.g. GS3 · Economy">
+        <select class="pl-input" title="Which notes subject it goes under">
+          <option value="auto">Notes: from name</option>
+          ${(planner.noteSubjects || []).map((n) => `<option value="${n.id}">Notes: ${escapeHtml(n.name)}</option>`).join("")}
+          <option value="">Not in notes</option>
+        </select>
         <button class="btn small" type="submit">Add</button>
       </form>
     </div>`;
   }).join("");
+}
+
+/* Where a plan subject lives in the notes, e.g. "GS3 › Agriculture". */
+function plStripGs(name) { return String(name).replace(/^\s*gs\s*[1-4]\s*[·:\-–—|]?\s*/i, "").trim() || String(name).trim(); }
+function plNotePathHtml(s) {
+  if (!s.noteSubjectId) return "";
+  const ns = (planner.noteSubjects || []).find((n) => n.id === s.noteSubjectId);
+  if (!ns) return "";
+  if (s.noteMode === "subject") {
+    return `<span class="pl-path pl-link" title="Each subtopic is a notes page directly under ${escapeHtml(ns.name)}" onclick="plRevealInNotes('${ns.id}', null)">📒 ${escapeHtml(ns.name)}</span>`;
+  }
+  const f = s.noteTopicId && typeof findTopic === "function" ? findTopic(s.noteTopicId) : null;
+  return `<span class="pl-path pl-link" title="Show in the notes sidebar · each subtopic is a notes page in this topic" onclick="plRevealInNotes('${ns.id}', ${s.noteTopicId ? `'${s.noteTopicId}'` : "null"})">📒 ${escapeHtml(ns.name)} › ${escapeHtml(f ? f.topic.name : plStripGs(s.name))}</span>`;
+}
+/* Open the subject (and topic) in the notes sidebar and scroll to it. */
+function plRevealInNotes(subjectId, topicId) {
+  ui.collapsedSubjects[subjectId] = false;
+  if (topicId) ui.collapsedTopics[topicId] = false;
+  if (ui.sidebarHidden) ui.sidebarHidden = false;
+  saveUiPrefs();
+  render();
+  const el = document.getElementById(topicId ? `nav-topic-${topicId}` : "sidebar");
+  if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 function plRenderLog() {
@@ -275,12 +312,14 @@ function plCycle(id) {
 function plMoveSubject(id) { api("POST", `/api/planner/subjects/${id}/move-up`).then(plReload); }
 function plDeleteSubject(id) {
   const s = plFindSubject(id); if (!s) return;
-  if (!confirm(`Remove "${s.name}" and its ${(s.topics || []).length} topics from the plan?\n\nYour notes for it stay in NotesVerse, and days already logged keep their text.`)) return;
+  if (!confirm(`Stop tracking "${s.name}" in the plan?\n\nIts topic and subtopics stay in your notes, and days already logged keep their text.`)) return;
   api("DELETE", `/api/planner/subjects/${id}`).then(plReload);
 }
-function plAddSubject(track, input) {
+function plAddSubject(track, input, sel) {
   const v = input.value.trim(); if (!v) return;
-  api("POST", "/api/planner/subjects", { track, name: v }).then(plReload);
+  const body = { track, name: v };
+  if (sel && sel.value !== "auto") body.noteSubjectId = sel.value;
+  api("POST", "/api/planner/subjects", body).then(plReload);
 }
 function plToggleTopics(id) { plOpenTopics.has(id) ? plOpenTopics.delete(id) : plOpenTopics.add(id); plRenderSubjects(); }
 function plAddTopics(subjectId, input) {
@@ -302,5 +341,24 @@ function plToggleTopic(subjectId, topicId, done) {
   // Ticking a linked topic records a revision, so refresh the Due count too.
   api("PATCH", `/api/planner/topics/${topicId}`, { done }).then(plReload);
 }
+function plSetNoteTarget(subjectId, noteSubjectId) {
+  api("PATCH", `/api/planner/subjects/${subjectId}`, { noteSubjectId }).then(plReload);
+}
+function plPush(subjectId) { api("POST", `/api/planner/subjects/${subjectId}/push`).then(plReload); }
 function plMoveTopic(id) { api("POST", `/api/planner/topics/${id}/move-up`).then(plReload); }
-function plDeleteTopic(id) { api("DELETE", `/api/planner/topics/${id}`).then(plReload); }
+async function plDeleteTopic(id) {
+  // The subtopic is the same item in your notes, so warn about what goes with it.
+  let msg = "Delete this subtopic?";
+  try {
+    const { notes } = await api("GET", `/api/planner/topics/${id}/impact`);
+    if (notes) {
+      const parts = [];
+      if (notes.bullets) parts.push(`${notes.bullets} bullet${notes.bullets === 1 ? "" : "s"}`);
+      if (notes.pyqs) parts.push(`${notes.pyqs} PYQ${notes.pyqs === 1 ? "" : "s"}`);
+      if (notes.attachments) parts.push(`${notes.attachments} attachment${notes.attachments === 1 ? "" : "s"}`);
+      msg = `Delete "${notes.name}"?\n\nIts notes page is deleted too` + (parts.length ? `, with ${parts.join(", ")}.` : " (nothing is written in it yet).");
+    }
+  } catch (e) { /* fall back to the plain question */ }
+  if (!confirm(msg)) return;
+  api("DELETE", `/api/planner/topics/${id}`).then(plReload);
+}
