@@ -69,8 +69,10 @@ router.post("/planner/subjects", (req, res) => {
   const max = db.prepare("SELECT COALESCE(MAX(sort_order),-1) m FROM plan_subjects WHERE track=?").get(track).m;
   db.transaction(() => {
     db.prepare("INSERT INTO plan_subjects (id,track,name,status,sort_order) VALUES (?,?,?, 'todo', ?)").run(id, track, String(name).trim(), max + 1);
-    // Goes under the notes subject you picked, or the one its name points to.
-    if (noteSubjectId !== undefined) sync.setTarget(db, id, noteSubjectId || null);
+    // Prelims subjects stay in the plan only; others go under the notes
+    // subject you picked, or the one their name points to.
+    if (track === "prelims") sync.setTarget(db, id, null);
+    else if (noteSubjectId !== undefined) sync.setTarget(db, id, noteSubjectId || null);
     else sync.assignDefault(db, id);
   })();
   res.json({ id });
@@ -82,7 +84,7 @@ router.patch("/planner/subjects/:id", (req, res) => {
   const { name, status } = req.body;
   const tx = db.transaction(() => {
     // Choose which notes subject this goes under ("" = not in notes).
-    if (req.body.noteSubjectId !== undefined) sync.setTarget(db, subj.id, req.body.noteSubjectId || null);
+    if (req.body.noteSubjectId !== undefined) sync.setTarget(db, subj.id, subj.track === "prelims" ? null : (req.body.noteSubjectId || null));
     if (name !== undefined && String(name).trim()) {
       db.prepare("UPDATE plan_subjects SET name=? WHERE id=?").run(String(name).trim(), subj.id);
       sync.onPlanSubjectRenamed(db, subj.id, String(name).trim());

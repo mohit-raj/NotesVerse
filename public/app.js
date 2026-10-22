@@ -612,10 +612,10 @@ function renderTopbar() {
       <div class="pill-stat">📊 <b>${mastery}%</b></div>
     </div>
     <div style="display:flex; gap:8px; align-items:center;">
+      <span class="btn" onclick="openDashboard()">📊 Dashboard</span>
       <span class="btn ${ui.skeleton ? "solid" : ""}" onclick="toggleSkeleton()">📄 Skeleton</span>
       <span class="btn ${ui.test ? "solid" : ""}" onclick="toggleTest()">🧠 Test me</span>
       <span class="btn" onclick="toggleTheme()">${ui.darkMode ? "☀️ Light" : "🌙 Dark"}</span>
-      <span class="btn" onclick="openDashboard()">📊 Dashboard</span>
       <span class="btn ${ui.currentView === "planner" ? "solid" : ""}" onclick="openPlanner()">🗓 Micro Plan</span>
       ${authEnabled ? `<span class="btn" onclick="doLogout()">🔒 Log out</span>` : ""}
     </div>

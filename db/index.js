@@ -45,5 +45,14 @@ db.exec("UPDATE plan_subjects SET note_mode='subject' WHERE note_subject_id IS N
 require("./planner-seed").seedPlanner(db);
 /* --- Micro Plan: move an earlier layout (subtopics as sections) to topics --- */
 require("./planner-sync").migrateToTopics(db);
+/* --- Micro Plan: prelims subjects are plan-only (once; any notes pages they
+   made are kept, the prelims subtopics just stop syncing) --- */
+if (!db.prepare("SELECT 1 FROM plan_settings WHERE key='prelims_plan_only'").get()) {
+  db.transaction(() => {
+    db.prepare("UPDATE plan_topics SET microtheme_id=NULL WHERE subject_id IN (SELECT id FROM plan_subjects WHERE track='prelims')").run();
+    db.prepare("UPDATE plan_subjects SET note_subject_id=NULL, note_mode=NULL, note_topic_id=NULL WHERE track='prelims'").run();
+    db.prepare("INSERT OR REPLACE INTO plan_settings (key,value) VALUES ('prelims_plan_only','1')").run();
+  })();
+}
 
 module.exports = db;

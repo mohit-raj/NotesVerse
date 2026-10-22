@@ -41,6 +41,7 @@ db.transaction(() => {
   names.forEach((n, i) => ins.run(crypto.randomUUID(), n, i + 1));
   db.prepare("SELECT id FROM plan_subjects ORDER BY CASE track WHEN 'prelims' THEN 0 WHEN 'mains' THEN 1 WHEN 'ethics' THEN 2 ELSE 3 END, sort_order").all()
     .forEach((s) => sync.assignDefault(db, s.id)); // in plan order, so notes topics keep that order
+  db.prepare("UPDATE plan_subjects SET note_subject_id=NULL, note_mode=NULL, note_topic_id=NULL WHERE track='prelims'").run();
 })();
 db.pragma("wal_checkpoint(FULL)");
 console.log(`Removed ${before.subjects} subjects and ${before.microthemes} microthemes.`);

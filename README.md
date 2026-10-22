@@ -177,6 +177,8 @@ Open the printed `http://localhost:3000` in your browser.
     removing a plan subject keeps its notes. Pick or change where a plan
     subject goes under ▸ Subtopics → "Goes in notes under".
   - Ticking a subtopic done marks its page revised.
+  - Prelims subjects and their subtopics live in the plan only (no notes
+    picker on the Prelims card).
   - Hours shown for a day come from the study timer — there is no second
     hours field. The sticky note stays your undated scratchpad.
   - Countdown to prelims and to your mains target date (editable at the

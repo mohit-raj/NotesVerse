@@ -16,6 +16,7 @@ const summaryRoutes = require("./routes/summary.routes");
 const attachmentsRoutes = require("./routes/attachments.routes");
 const notesRoutes = require("./routes/notes.routes");
 const chatRoutes = require("./routes/chat.routes");
+const pyqRoutes = require("./routes/pyq.routes");
 const plannerRoutes = require("./routes/planner.routes");
 const topicsRoutes = require("./routes/topics.routes");
 
@@ -44,6 +45,7 @@ app.use("/api", summaryRoutes);
 app.use("/api", attachmentsRoutes);
 app.use("/api", notesRoutes);
 app.use("/api", chatRoutes);
+app.use("/api", pyqRoutes);
 app.use("/api", plannerRoutes);
 app.use("/api", topicsRoutes);
 

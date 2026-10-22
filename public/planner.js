@@ -216,12 +216,12 @@ function plRenderSubjects() {
             ${plNotePathHtml(s)}
           </div>
           ${open ? `<div class="pl-topics">
-            <label class="pl-label">Goes in notes under
+            ${t.k === "prelims" ? "" : `<label class="pl-label">Goes in notes under
               <select class="pl-input" onchange="plSetNoteTarget('${s.id}', this.value)">
                 <option value="">— not in notes —</option>
                 ${(planner.noteSubjects || []).map((n) => `<option value="${n.id}" ${n.id === s.noteSubjectId ? "selected" : ""}>${escapeHtml(n.name)}</option>`).join("")}
-              </select></label>
-            ${s.noteSubjectId && tp.some((x) => !x.microthemeId) ? `<span class="btn small" onclick="plPush('${s.id}')">↻ Match ${tp.filter((x) => !x.microthemeId).length} with notes</span>` : ""}
+              </select></label>`}
+            ${t.k !== "prelims" && s.noteSubjectId && tp.some((x) => !x.microthemeId) ? `<span class="btn small" onclick="plPush('${s.id}')">↻ Match ${tp.filter((x) => !x.microthemeId).length} with notes</span>` : ""}
             ${tp.length ? `<ul>${tp.map((x, j) => `<li class="${x.done ? "tdone" : ""}">
               <label><input type="checkbox" ${x.done ? "checked" : ""} onchange="plToggleTopic('${s.id}','${x.id}',this.checked)"> <span>${escapeHtml(x.name)}</span></label>
               ${x.microthemeId && findMicrotheme(x.microthemeId) ? `<span class="pl-ic" title="Open notes" onclick="openMicrotheme('${x.microthemeId}')">📖</span>` : ""}
@@ -235,7 +235,10 @@ function plRenderSubjects() {
           </div>` : ""}
         </li>`;
       }).join("")}</ol>` : `<div class="weak-empty">No subjects yet. Add the first one below.</div>`}
-      <form class="pl-add pl-add-subj" onsubmit="event.preventDefault(); plAddSubject('${t.k}', this.elements[0], this.elements[1])">
+      ${t.k === "prelims" ? `<form class="pl-add" onsubmit="event.preventDefault(); plAddSubject('${t.k}', this.elements[0], null)">
+        <input class="pl-input" type="text" placeholder="Add subject, e.g. Economy">
+        <button class="btn small" type="submit">Add</button>
+      </form>` : `<form class="pl-add pl-add-subj" onsubmit="event.preventDefault(); plAddSubject('${t.k}', this.elements[0], this.elements[1])">
         <input class="pl-input" type="text" placeholder="Add topic, e.g. GS3 · Economy">
         <select class="pl-input" title="Which notes subject it goes under">
           <option value="auto">Notes: from name</option>
@@ -243,7 +246,7 @@ function plRenderSubjects() {
           <option value="">Not in notes</option>
         </select>
         <button class="btn small" type="submit">Add</button>
-      </form>
+      </form>`}
     </div>`;
   }).join("");
 }
