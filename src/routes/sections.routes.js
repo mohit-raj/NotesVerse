@@ -10,7 +10,7 @@ router.post("/sections", (req, res) => {
   const id = uid();
   const maxOrder = db.prepare("SELECT COALESCE(MAX(sort_order),-1) m FROM sections WHERE microtheme_id=?").get(microthemeId).m;
   db.prepare("INSERT INTO sections (id,microtheme_id,title,starred,sort_order) VALUES (?,?,?,0,?)").run(id, microthemeId, title, maxOrder + 1);
-  sync.onSectionCreated(db, id); // shows up as a subtopic in the Micro Plan
+  if (typeof sync.onSectionCreated === "function") sync.onSectionCreated(db, id); // shows up as a subtopic in the Micro Plan
   res.json({ id });
 });
 
@@ -18,7 +18,7 @@ router.patch("/sections/:id", (req, res) => {
   const { title, starred } = req.body;
   if (title !== undefined) {
     db.prepare("UPDATE sections SET title=? WHERE id=?").run(title, req.params.id);
-    sync.onSectionRenamed(db, req.params.id, title);
+    if (typeof sync.onSectionRenamed === "function") sync.onSectionRenamed(db, req.params.id, title);
   }
   if (starred !== undefined) db.prepare("UPDATE sections SET starred=? WHERE id=?").run(starred ? 1 : 0, req.params.id);
   res.json({ ok: true });
@@ -26,7 +26,7 @@ router.patch("/sections/:id", (req, res) => {
 
 router.delete("/sections/:id", (req, res) => {
   db.transaction(() => {
-    sync.beforeSectionDeleted(db, req.params.id);
+    if (typeof sync.beforeSectionDeleted === "function") sync.beforeSectionDeleted(db, req.params.id);
     db.prepare("DELETE FROM sections WHERE id=?").run(req.params.id);
   })();
   res.json({ ok: true });

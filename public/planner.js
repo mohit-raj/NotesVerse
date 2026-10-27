@@ -51,6 +51,18 @@ function plEntry(date) {
   });
   return d;
 }
+/* A day's subtopics for one track are stored as one text, names joined by "||" (older single names still work). */
+const PL_SEP = "||";
+function plTopicList(v) { return String(v || "").split(PL_SEP).map((x) => x.trim()).filter(Boolean); }
+let plPickOpen = {};
+function plToggleTopicPick(track, name, on) {
+  const te = plEntry(plDay).tracks[track];
+  const cur = plTopicList(te.topic).filter((x) => x !== name);
+  if (on) cur.push(name);
+  te.topic = cur.join(PL_SEP);
+  plPickOpen[track] = true;
+  plQueueDaySave(); plRenderDay();
+}
 function plIsLogged(d) { return d && (d.note || Object.values(d.tracks || {}).some((t) => t.target || t.done)); }
 function plMinutes(m) { if (!m) return ""; const h = Math.floor(m / 60), r = m % 60; return h ? `${h}h ${r}m` : `${r}m`; }
 
@@ -168,8 +180,9 @@ function plRenderDay() {
     const sObj = subs.find((s) => s.name === te.subject);
     const tops = (sObj && sObj.topics) || [];
     const tnames = tops.map((x) => x.name);
-    const topts = (te.topic && !tnames.includes(te.topic) ? [te.topic] : []).concat(tnames);
-    const linked = tops.find((x) => x.name === te.topic && x.microthemeId && findMicrotheme(x.microthemeId));
+    const selTopics = plTopicList(te.topic);
+    const topts = selTopics.filter((x) => !tnames.includes(x)).concat(tnames);
+    const linkedAll = selTopics.map((n) => tops.find((x) => x.name === n && x.microthemeId && findMicrotheme(x.microthemeId))).filter(Boolean);
     return `<div class="pl-card pl-${t.k}">
       <div class="pl-track">${t.n}</div>
       <label class="pl-label">Subject
@@ -177,12 +190,14 @@ function plRenderDay() {
           <option value="">— none today —</option>
           ${opts.map((n) => `<option value="${escapeHtml(n)}" ${n === te.subject ? "selected" : ""}>${escapeHtml(n)}</option>`).join("")}
         </select></label>
-      <label class="pl-label">Subtopic
-        <select class="pl-input" onchange="plSetField('${t.k}','topic',this.value)" ${topts.length ? "" : "disabled"}>
-          <option value="">${topts.length ? "— pick a subtopic —" : "No subtopics yet"}</option>
-          ${topts.map((n) => { const o = tops.find((x) => x.name === n); return `<option value="${escapeHtml(n)}" ${n === te.topic ? "selected" : ""}>${o && o.done ? "✓ " : ""}${escapeHtml(n)}</option>`; }).join("")}
-        </select></label>
-      ${linked ? `<span class="btn small" onclick="openMicrotheme('${linked.microthemeId}')">📖 Open notes</span>` : ""}
+      <div class="pl-label">Subtopics <span class="pl-s">(tick one or more)</span>
+        <details class="pl-pick" ${plPickOpen[t.k] ? "open" : ""} ontoggle="plPickOpen['${t.k}']=this.open">
+          <summary class="pl-input">${selTopics.length ? selTopics.map(escapeHtml).join(", ") : (topts.length ? "— pick subtopics —" : "No subtopics yet")}</summary>
+          <div class="pl-pick-list">
+            ${topts.map((n) => { const o = tops.find((x) => x.name === n); return `<label class="pl-pick-row"><input type="checkbox" ${selTopics.includes(n) ? "checked" : ""} onchange="plToggleTopicPick('${t.k}', this.getAttribute('data-n'), this.checked)" data-n="${escapeHtml(n)}"> ${o && o.done ? "✓ " : ""}${escapeHtml(n)}</label>`; }).join("")}
+          </div>
+        </details></div>
+      ${linkedAll.map((l) => `<span class="btn small" onclick="openMicrotheme('${l.microthemeId}')">📖 ${escapeHtml(l.name)}</span>`).join(" ")}
       <label class="pl-label">Target
         <textarea class="pl-input" rows="3" placeholder="e.g. Class 3 + notes + 1 answer"
           oninput="plSetField('${t.k}','target',this.value,true)" onblur="plFlushDaySave()">${escapeHtml(te.target)}</textarea></label>
@@ -285,7 +300,7 @@ function plRenderLog() {
     ${ds.map((d) => { const e = planner.days[d]; return `<tr>
       <td class="pl-dt"><a href="#" onclick="event.preventDefault(); plPickDay('${d}'); document.getElementById('pl-day-title').scrollIntoView({behavior:'smooth'})">${plFmt(d)}</a></td>
       ${PL_TRACKS.map((t) => { const te = (e.tracks || {})[t.k] || {}; return `<td>${te.target ? escapeHtml(te.target) : `<span class="pl-s">—</span>`}
-        ${te.subject ? `<span class="pl-s">${escapeHtml(te.subject)}${te.topic ? " · " + escapeHtml(te.topic) : ""}</span>` : ""}
+        ${te.subject ? `<span class="pl-s">${escapeHtml(te.subject)}${te.topic ? " · " + plTopicList(te.topic).map(escapeHtml).join(", ") : ""}</span>` : ""}
         ${te.done ? `<span class="pl-ok">✓ done</span>` : ""}</td>`; }).join("")}
       <td>${escapeHtml(e.note || "")}</td>
       <td>${plMinutes(merged[d] || 0) || `<span class="pl-s">—</span>`}</td>
@@ -299,7 +314,7 @@ function plSetNote(v) { plEntry(plDay).note = v; plQueueDaySave(); }
 function plSetField(track, field, value, typing) {
   const te = plEntry(plDay).tracks[track];
   te[field] = value;
-  if (field === "subject") te.topic = "";
+  if (field === "subject") { te.topic = ""; plPickOpen[track] = false; }
   plQueueDaySave();
   if (!typing && (field === "subject" || field === "topic")) plRenderDay();
 }

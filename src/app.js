@@ -19,6 +19,9 @@ const chatRoutes = require("./routes/chat.routes");
 const pyqRoutes = require("./routes/pyq.routes");
 const plannerRoutes = require("./routes/planner.routes");
 const topicsRoutes = require("./routes/topics.routes");
+const importRoutes = require("./routes/import.routes");
+const themesRoutes = require("./routes/themes.routes");
+const backupRoutes = require("./routes/backup.routes");
 
 const app = express();
 app.use(express.json({ limit: "40mb" }));
@@ -38,6 +41,8 @@ app.use("/api", microthemesRoutes);
 app.use("/api", sectionsRoutes);
 app.use("/api", itemsRoutes);
 app.use("/api", peopleRoutes);
+app.use("/api", themesRoutes);
+app.use("/api", backupRoutes);
 app.use("/api", pyqsRoutes);
 app.use("/api", aspectsRoutes);
 app.use("/api", quotesRoutes);
@@ -48,5 +53,6 @@ app.use("/api", chatRoutes);
 app.use("/api", pyqRoutes);
 app.use("/api", plannerRoutes);
 app.use("/api", topicsRoutes);
+app.use("/api", importRoutes);
 
 module.exports = app;

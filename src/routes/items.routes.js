@@ -13,7 +13,8 @@ router.post("/items", (req, res) => {
 });
 
 router.patch("/items/:id", (req, res) => {
-  db.prepare("UPDATE items SET text=? WHERE id=?").run(req.body.text, req.params.id);
+  if (req.body.text !== undefined) db.prepare("UPDATE items SET text=? WHERE id=?").run(req.body.text, req.params.id);
+  if (req.body.indent !== undefined) db.prepare("UPDATE items SET indent=? WHERE id=?").run(Math.max(0, Math.min(2, req.body.indent | 0)), req.params.id);
   res.json({ ok: true });
 });
 

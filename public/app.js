@@ -491,60 +491,20 @@ function renderSidebar() {
 
   if (ui.currentView === "microtheme" && mt) {
     const found = findMicrotheme(mt.id);
-    const doneAsp = (mt.aspects || []).filter((a) => a.memorised).length;
-    const totalAsp = (mt.aspects || []).length;
 
     html += `<div class="sb-section">
       <div class="sb-crumb">${escapeHtml(found.subj.name)}</div>
       <div class="sb-title">${escapeHtml(mt.name)}</div>
     </div>`;
 
-    html += `<div class="sb-section">
-      <div class="stat-label">ASPECTS MEMORISED</div>
-      <div class="stat-num">${doneAsp} / ${totalAsp || 0}</div>
-      <div class="stat-bar"><div class="stat-bar-fill" style="width:${totalAsp ? (doneAsp / totalAsp) * 100 : 0}%"></div></div>
-    </div>`;
-
-    html += `<div class="sb-section">
-      <div class="stat-label">REVISIONS THIS MICROTHEME</div>
-      <div class="stat-num">${(mt.revisions || []).length}</div>
-      <div class="sb-sub">${(mt.revisions || []).length ? "last on " + fmtDate(mt.revisions[mt.revisions.length - 1]) : "not revised yet"}</div>
-      <div style="margin-top:8px;"><span class="btn small solid" onclick="markRevised('${mt.id}')">✓ Mark revised</span></div>
-    </div>`;
-
-    const flagged = (mt.sections || []).filter((s) => s.starred);
-    html += `<div class="sb-section">
-      <div class="stat-label">⚠ WEAK POINTS</div>
-      ${flagged.length ? flagged.map((s) => `<div class="sb-sub">★ ${escapeHtml(s.title)}</div>`).join("") : `<div class="weak-empty">None flagged. Tap ☆ on a section to flag it.</div>`}
-    </div>`;
-
-    html += `<div class="sb-section">
-      <div class="row-between"><span class="stat-label">CONTENT SECTIONS</span></div>
-      <div style="margin-top:8px; display:flex; gap:8px;">
-        <span class="btn small" onclick="expandAllSections('${mt.id}')">⊕ Expand all</span>
-        <span class="btn small" onclick="collapseAllSections('${mt.id}')">⊖ Collapse all</span>
-      </div>
-    </div>`;
-
-    html += `<div class="sb-section" style="border-bottom:none;">
-      <div class="stat-label">ASPECTS (tick when memorised)</div>
-      ${(mt.aspects || []).map((a) => `
-        <div class="aspect-item ${a.memorised ? "done" : ""}">
-          <input type="checkbox" ${a.memorised ? "checked" : ""} onchange="toggleAspect('${a.id}', this.checked)">
-          <label>${escapeHtml(a.label)}</label>
-        </div>`).join("")}
-      <div class="nav-add" onclick="addAspect('${mt.id}')">+ Add aspect</div>
-    </div>`;
-  } else if (ui.currentView === "planner") {
+    } else if (ui.currentView === "planner") {
     html += `<div class="sb-section">
       <div class="sb-title">Micro Plan</div>
       <div class="sb-sub">Daily targets for prelims, mains, ethics and optional</div>
     </div>`;
   } else {
     html += `<div class="sb-section">
-      <div class="sb-title">Dashboard</div>
-      <div class="sb-sub">Overview across every subject</div>
-      <div style="margin-top:8px;"><span class="btn small solid" onclick="openPlanner()">🗓 Open Micro Plan</span></div>
+      <div class="sb-title">${ui.currentView === "theme" || ui.currentView === "themes" ? "Themes" : "Dashboard"}</div>
     </div>`;
   }
 
@@ -595,31 +555,15 @@ function renderSidebar() {
 /* ============================= RENDER: TOPBAR ============================= */
 function renderTopbar() {
   const tb = document.getElementById("topbar");
-  const mt = getCurrentMT();
-  const streak = computeStreak();
-  let due = 0, mastery = 0;
-  if (ui.currentView === "microtheme" && mt) {
-    due = isDue(mt) ? 1 : 0;
-    mastery = mtMastery(mt);
-  } else {
-    due = allMicrothemes().filter(({ mt }) => isDue(mt)).length;
-    mastery = overallMastery();
-  }
   tb.innerHTML = `
-    <div class="topbar-left">
-      <div class="pill-stat">🔥 <b>${streak}-day</b> streak</div>
-      <div class="pill-stat">📌 Due: <b>${due}</b></div>
-      <div class="pill-stat">📊 <b>${mastery}%</b></div>
-    </div>
+    <div class="topbar-left"></div>
     <div style="display:flex; gap:8px; align-items:center;">
-      <span class="btn" onclick="openDashboard()">📊 Dashboard</span>
-      <span class="btn ${ui.skeleton ? "solid" : ""}" onclick="toggleSkeleton()">📄 Skeleton</span>
-      <span class="btn ${ui.test ? "solid" : ""}" onclick="toggleTest()">🧠 Test me</span>
+      <span class="btn ${ui.currentView === "dashboard" ? "solid" : ""}" onclick="openDashboard()">📊 Dashboard</span>
+      <span class="btn ${ui.currentView === "themes" || ui.currentView === "theme" ? "solid" : ""}" onclick="openThemes()">🏷 Themes</span>
       <span class="btn" onclick="toggleTheme()">${ui.darkMode ? "☀️ Light" : "🌙 Dark"}</span>
       <span class="btn ${ui.currentView === "planner" ? "solid" : ""}" onclick="openPlanner()">🗓 Micro Plan</span>
       ${authEnabled ? `<span class="btn" onclick="doLogout()">🔒 Log out</span>` : ""}
     </div>
-    <div class="progress-track"><div class="progress-fill" style="width:${mastery}%"></div></div>
   `;
 }
 
@@ -720,7 +664,7 @@ function renderMicrotheme() {
         <span onclick="removeSection('${sec.id}')">del</span>
       </span>`;
     html += boxOpen(sec.id, sec.title, editHtml, starHtml);
-    html += `<ul class="item-list">${(sec.items || []).map((it) => renderItem(mt.id, it)).join("")}</ul>
+    html += `<ul class="item-list">${(sec.items || []).map((it, i, arr) => renderItem(mt.id, it, arr[i + 1] && (arr[i + 1].indent || 0) > (it.indent || 0))).join("")}</ul>
       <div class="add-item-btn" onclick="addItem('${sec.id}')">+ Add bullet</div>`;
     html += boxClose;
   });
@@ -757,21 +701,26 @@ function splitTermAndRest(text) {
   return { term: m[1], rest: m[2] };
 }
 
-function renderItem(mtId, item) {
+function itemBodyHtml(text) {
+  const m = String(text).match(/^([^:*_=^{}]{2,60}?):\s+(\S[\s\S]*)$/);
+  if (m && !/^https?$/i.test(m[1])) return `<span class="lbl">${escapeHtml(m[1])}:</span> ${mdToHtml(m[2])}`;
+  return mdToHtml(text);
+}
+function renderItem(mtId, item, isGroup) {
   const key = mtId + ":" + item.id;
   const revealed = ui.revealed[key];
   const clickable = ui.test || ui.skeleton;
 
   if (ui.skeleton && !revealed) {
     const { term, rest } = splitTermAndRest(item.text);
-    return `<li class="${item.indent ? "indent" : ""}" onclick="revealItem('${mtId}','${item.id}')">
+    return `<li class="${item.indent ? "indent indent-" + item.indent : ""}${isGroup ? " grp" : ""}" onclick="revealItem('${mtId}','${item.id}')">
       <span class="item-body">${mdToHtml(term)}${rest ? ` <span class="skeleton-hint">– ?</span>` : ""}</span>
     </li>`;
   }
 
-  return `<li class="${item.indent ? "indent" : ""} ${revealed ? "revealed" : ""}" ${clickable ? `onclick="revealItem('${mtId}','${item.id}')"` : ""}>
-    <span class="item-body">${mdToHtml(item.text)}</span>
-    <span class="item-actions"><span onclick="event.stopPropagation();editItem('${item.id}')">edit</span><span onclick="event.stopPropagation();removeItem('${item.id}')">del</span></span>
+  return `<li class="${item.indent ? "indent indent-" + item.indent : ""}${isGroup ? " grp" : ""} ${revealed ? "revealed" : ""}" ${clickable ? `onclick="revealItem('${mtId}','${item.id}')"` : ""}>
+    <span class="item-body">${itemBodyHtml(item.text)}</span>
+    <span class="item-actions"><span title="Make it a main point" onclick="event.stopPropagation();itemIndent('${item.id}',-1)">←</span><span title="Make it a sub-point" onclick="event.stopPropagation();itemIndent('${item.id}',1)">→</span><span onclick="event.stopPropagation();editItem('${item.id}')">edit</span><span onclick="event.stopPropagation();removeItem('${item.id}')">del</span></span>
   </li>`;
 }
 
@@ -1028,23 +977,19 @@ function renameSection(secId) {
 function removeSection(secId) {
   if (confirm("Delete this whole section?")) mutate("DELETE", `/api/sections/${secId}`);
 }
-function addSection(mtId) {
-  const t = prompt("New section title:");
-  if (t) mutate("POST", "/api/sections", { microthemeId: mtId, title: t });
-}
+function addSection(mtId) { nvEditor({ mtId, mode: "section" }); }
 const SYNTAX_HINT = "==yellow highlight==, ^^blue highlight^^, __underline__, **bold**, *italic*, {{color:text}} e.g. {{red:urgent}} (colors: red, green, blue, navy, orange, purple, grey, black)";
 
-function addItem(secId) {
-  const t = prompt(`New bullet (${SYNTAX_HINT}). Start with '- ' for a sub-bullet:`);
-  if (!t) return;
-  const indent = t.trim().startsWith("-") ? 1 : 0;
-  const clean = indent ? t.trim().replace(/^-+\s*/, "") : t;
-  mutate("POST", "/api/items", { sectionId: secId, text: clean, indent });
-}
+function addItem(secId) { nvEditor({ mtId: ui.currentMicrotheme, secId, mode: "bullets" }); }
 function editItem(itemId) {
   const cur = findItemById(itemId);
-  const t = prompt(`Edit bullet (${SYNTAX_HINT}):`, cur ? cur.text : "");
-  if (t !== null && t !== "") mutate("PATCH", `/api/items/${itemId}`, { text: t });
+  if (!cur) return;
+  nvEditor({ mtId: ui.currentMicrotheme, secId: cur.section_id || cur.sectionId, itemId, text: cur.text, mode: "edit" });
+}
+function itemIndent(itemId, d) {
+  const it = findItemById(itemId); if (!it) return;
+  const n = Math.max(0, Math.min(2, (it.indent || 0) + d));
+  if (n !== (it.indent || 0)) mutate("PATCH", `/api/items/${itemId}`, { indent: n });
 }
 function removeItem(itemId) { mutate("DELETE", `/api/items/${itemId}`); }
 
@@ -1367,3 +1312,9 @@ function findPersonBulletById(id) {
   renderTimerWidget();
   renderChatWidget();
 })();
+
+
+/* ---- reading colour theme (headings / group labels / content / markers) ---- */
+function nvTheme() { try { return localStorage.getItem("uv_nvtheme") || "ocean"; } catch (e) { return "ocean"; } }
+function nvSetTheme(v) { try { localStorage.setItem("uv_nvtheme", v); } catch (e) {} document.documentElement.setAttribute("data-nvt", v); }
+document.documentElement.setAttribute("data-nvt", nvTheme());
