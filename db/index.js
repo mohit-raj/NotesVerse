@@ -36,6 +36,8 @@ if (!planSubjCols.includes("note_subject_id")) db.exec("ALTER TABLE plan_subject
 if (!planSubjCols.includes("note_mode")) db.exec("ALTER TABLE plan_subjects ADD COLUMN note_mode TEXT");
 if (!planSubjCols.includes("note_microtheme_id")) db.exec("ALTER TABLE plan_subjects ADD COLUMN note_microtheme_id TEXT REFERENCES microthemes(id) ON DELETE SET NULL");
 if (!planSubjCols.includes("note_topic_id")) db.exec("ALTER TABLE plan_subjects ADD COLUMN note_topic_id TEXT REFERENCES subject_topics(id) ON DELETE SET NULL");
+const planEntryCols = db.prepare("PRAGMA table_info(plan_entries)").all().map((c) => c.name);
+if (planEntryCols.length && !planEntryCols.includes("done_topics")) db.exec("ALTER TABLE plan_entries ADD COLUMN done_topics TEXT DEFAULT ''");
 const planTopicCols = db.prepare("PRAGMA table_info(plan_topics)").all().map((c) => c.name);
 if (!planTopicCols.includes("section_id")) db.exec("ALTER TABLE plan_topics ADD COLUMN section_id TEXT REFERENCES sections(id) ON DELETE SET NULL");
 // Links made by the earlier two-way version were subject-level.

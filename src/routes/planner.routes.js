@@ -5,7 +5,8 @@ const sync = require("../../db/planner-sync");
 
 const router = express.Router();
 
-const TRACKS = ["prelims", "mains", "ethics", "optional"];
+const TRACKS = ["prelims", "mains", "ethics", "optional", "bpsc"];
+const PLAN_ONLY = ["prelims", "bpsc"]; // plan-only tracks: their subjects/subtopics do not create notes pages
 const STATUSES = ["todo", "current", "done"];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -41,7 +42,7 @@ router.get("/planner", (req, res) => {
   });
   db.prepare("SELECT * FROM plan_entries").all().forEach((e) => {
     if (!days[e.date]) days[e.date] = { note: "", tracks: {} };
-    days[e.date].tracks[e.track] = { subject: e.subject || "", topic: e.topic || "", target: e.target || "", done: !!e.done };
+    days[e.date].tracks[e.track] = { subject: e.subject || "", topic: e.topic || "", target: e.target || "", done: !!e.done, doneTopics: e.done_topics || "" };
   });
 
   const noteSubjects = db.prepare("SELECT id,name FROM subjects ORDER BY sort_order, name").all();
@@ -71,7 +72,7 @@ router.post("/planner/subjects", (req, res) => {
     db.prepare("INSERT INTO plan_subjects (id,track,name,status,sort_order) VALUES (?,?,?, 'todo', ?)").run(id, track, String(name).trim(), max + 1);
     // Prelims subjects stay in the plan only; others go under the notes
     // subject you picked, or the one their name points to.
-    if (track === "prelims") sync.setTarget(db, id, null);
+    if (PLAN_ONLY.includes(track)) sync.setTarget(db, id, null);
     else if (noteSubjectId !== undefined) sync.setTarget(db, id, noteSubjectId || null);
     else sync.assignDefault(db, id);
   })();
@@ -84,7 +85,7 @@ router.patch("/planner/subjects/:id", (req, res) => {
   const { name, status } = req.body;
   const tx = db.transaction(() => {
     // Choose which notes subject this goes under ("" = not in notes).
-    if (req.body.noteSubjectId !== undefined) sync.setTarget(db, subj.id, subj.track === "prelims" ? null : (req.body.noteSubjectId || null));
+    if (req.body.noteSubjectId !== undefined) sync.setTarget(db, subj.id, PLAN_ONLY.includes(subj.track) ? null : (req.body.noteSubjectId || null));
     if (name !== undefined && String(name).trim()) {
       db.prepare("UPDATE plan_subjects SET name=? WHERE id=?").run(String(name).trim(), subj.id);
       sync.onPlanSubjectRenamed(db, subj.id, String(name).trim());
@@ -208,14 +209,14 @@ router.put("/planner/days/:date", (req, res) => {
   const tracks = req.body.tracks || {};
   const upsertDay = db.prepare(`INSERT INTO plan_days (date,note,updated_at) VALUES (?,?,?)
     ON CONFLICT(date) DO UPDATE SET note=excluded.note, updated_at=excluded.updated_at`);
-  const upsertEntry = db.prepare(`INSERT INTO plan_entries (date,track,subject,topic,target,done) VALUES (?,?,?,?,?,?)
-    ON CONFLICT(date,track) DO UPDATE SET subject=excluded.subject, topic=excluded.topic, target=excluded.target, done=excluded.done`);
+  const upsertEntry = db.prepare(`INSERT INTO plan_entries (date,track,subject,topic,target,done,done_topics) VALUES (?,?,?,?,?,?,?)
+    ON CONFLICT(date,track) DO UPDATE SET subject=excluded.subject, topic=excluded.topic, target=excluded.target, done=excluded.done, done_topics=excluded.done_topics`);
   db.transaction(() => {
     upsertDay.run(date, note, new Date().toISOString());
     TRACKS.forEach((t) => {
       const e = tracks[t];
       if (!e) return;
-      upsertEntry.run(date, t, String(e.subject || ""), String(e.topic || ""), String(e.target || ""), e.done ? 1 : 0);
+      upsertEntry.run(date, t, String(e.subject || ""), String(e.topic || ""), String(e.target || ""), e.done ? 1 : 0, String(e.doneTopics || ""));
     });
   })();
   res.json({ ok: true });

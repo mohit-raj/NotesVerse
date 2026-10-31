@@ -500,7 +500,7 @@ function renderSidebar() {
     } else if (ui.currentView === "planner") {
     html += `<div class="sb-section">
       <div class="sb-title">Micro Plan</div>
-      <div class="sb-sub">Daily targets for prelims, mains, ethics and optional</div>
+      <div class="sb-sub">Daily targets for prelims, mains, ethics, optional and BPSC</div>
     </div>`;
   } else {
     html += `<div class="sb-section">

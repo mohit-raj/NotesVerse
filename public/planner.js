@@ -1,5 +1,5 @@
 /* =====================================================================
-   MICRO PLAN — daily targets for Prelims, GS mains, Ethics, Optional.
+   MICRO PLAN — daily targets for Prelims, GS mains, Ethics, Optional, BPSC.
    Saved in the same SQLite vault (plan_* tables, /api/planner routes).
 
    Re-uses what NotesVerse already has instead of duplicating it:
@@ -18,8 +18,10 @@ const PL_TRACKS = [
   { k: "prelims", n: "Prelims" },
   { k: "mains", n: "GS mains" },
   { k: "ethics", n: "Ethics GS4" },
-  { k: "optional", n: "Optional" }
+  { k: "optional", n: "Optional" },
+  { k: "bpsc", n: "BPSC" }
 ];
+const plPlain = (k) => k === "prelims" || k === "bpsc"; // plan-only tracks (no notes pages)
 let planner = null;          // { settings, tracks, days }
 let plDay = plLocalDate(new Date());
 const plOpenTopics = new Set();
@@ -47,9 +49,64 @@ function plEntry(date) {
   if (!planner.days[date]) planner.days[date] = { note: "", tracks: {} };
   const d = planner.days[date];
   PL_TRACKS.forEach((t) => {
-    if (!d.tracks[t.k]) { const c = plCurrent(t.k); d.tracks[t.k] = { subject: c ? c.name : "", topic: "", target: "", done: false }; }
+    if (!d.tracks[t.k]) {
+      const c = plCurrent(t.k);
+      const e = { subject: c ? c.name : "", topic: "", target: "", done: false, doneTopics: "" };
+      const carry = plCarry(t.k, date);
+      if (carry) { if (t.k !== "bpsc") e.subject = carry.subject; e.topic = carry.left.join(PL_SEP); e.carried = carry.left.join(PL_SEP); }
+      d.tracks[t.k] = e;
+    }
+    if (d.tracks[t.k].doneTopics == null) d.tracks[t.k].doneTopics = "";
   });
   return d;
+}
+/* Topics picked on the latest earlier day that were not ticked: they come forward to this day. */
+function plCarry(track, date) {
+  const ds = Object.keys(planner.days).filter((x) => x < date).sort().reverse();
+  for (const x of ds) {
+    const te = (planner.days[x].tracks || {})[track];
+    const sel = te ? plTopicList(te.topic) : [];
+    if (!sel.length) continue;
+    const dn = plTopicList(te.doneTopics);
+    const left = sel.filter((n) => !dn.includes(n));
+    return left.length ? { subject: te.subject || "", left } : null;
+  }
+  return null;
+}
+/* Progress for one track card: ticked topics out of picked topics (or the single target tick). */
+function plTrackStats(te) {
+  const sel = plTopicList(te.topic);
+  if (sel.length) { const dn = plTopicList(te.doneTopics); return { total: sel.length, done: sel.filter((n) => dn.includes(n)).length }; }
+  if (te.target && String(te.target).trim()) return { total: 1, done: te.done ? 1 : 0 };
+  return { total: 0, done: 0 };
+}
+function plDayStats(e) {
+  let total = 0, done = 0;
+  PL_TRACKS.forEach((t) => { const s = plTrackStats(e.tracks[t.k]); total += s.total; done += s.done; });
+  return { total, done, pct: total ? Math.round((done / total) * 100) : 0 };
+}
+function plSyncDone(te) { const s = plTrackStats(te); if (plTopicList(te.topic).length) te.done = s.total > 0 && s.done === s.total; }
+function plBpscAdd(inp) {
+  const v = inp.value.trim(); if (!v) return;
+  const te = plEntry(plDay).tracks.bpsc;
+  const cur = plTopicList(te.topic);
+  if (!cur.includes(v)) cur.push(v);
+  te.topic = cur.join(PL_SEP);
+  plSyncDone(te); plQueueDaySave(); plRenderDay();
+}
+function plBpscRemove(name) {
+  const te = plEntry(plDay).tracks.bpsc;
+  te.topic = plTopicList(te.topic).filter((x) => x !== name).join(PL_SEP);
+  te.doneTopics = plTopicList(te.doneTopics).filter((x) => x !== name).join(PL_SEP);
+  plSyncDone(te); plQueueDaySave(); plRenderDay();
+}
+function plToggleTopicDone(track, name, on) {
+  const te = plEntry(plDay).tracks[track];
+  const cur = plTopicList(te.doneTopics).filter((x) => x !== name);
+  if (on) cur.push(name);
+  te.doneTopics = cur.join(PL_SEP);
+  plSyncDone(te);
+  plQueueDaySave(); plRenderDay();
 }
 /* A day's subtopics for one track are stored as one text, names joined by "||" (older single names still work). */
 const PL_SEP = "||";
@@ -60,6 +117,8 @@ function plToggleTopicPick(track, name, on) {
   const cur = plTopicList(te.topic).filter((x) => x !== name);
   if (on) cur.push(name);
   te.topic = cur.join(PL_SEP);
+  te.doneTopics = plTopicList(te.doneTopics).filter((x) => cur.includes(x)).join(PL_SEP);
+  plSyncDone(te);
   plPickOpen[track] = true;
   plQueueDaySave(); plRenderDay();
 }
@@ -107,7 +166,7 @@ function renderPlanner() {
     <div class="pl-wrap">
       <div class="pl-head">
         <div>
-          <h1 class="pl-title">UPSC 2027 Micro Plan</h1>
+          <h1 class="pl-title">UPSC/BPSC Micro Plan 2027</h1>
           <div class="pl-sub">${plFmt(plToday(), true)}</div>
         </div>
       </div>
@@ -122,6 +181,7 @@ function renderPlanner() {
         </div>
       </div>
       <div class="pl-studied" id="pl-studied"></div>
+      <div class="pl-daytotal" id="pl-day-total"></div>
       <div class="pl-grid" id="pl-day-cards"></div>
       <label class="pl-label" for="pl-day-note">Note for the day</label>
       <textarea id="pl-day-note" class="pl-input pl-note" placeholder="What went well, what slipped, what to carry to tomorrow"
@@ -166,6 +226,10 @@ function plRenderDay() {
   const e = plEntry(plDay);
   document.getElementById("pl-day-title").textContent = plDay === plToday() ? "Today's targets" : "Targets · " + plFmt(plDay);
   document.getElementById("pl-day-pick").value = plDay;
+  const ds = plDayStats(e);
+  document.getElementById("pl-day-total").innerHTML = ds.total
+    ? `<b>Day target: ${ds.done}/${ds.total} · ${ds.pct}%</b><span class="stat-bar pl-bar"><span class="stat-bar-fill" style="width:${ds.pct}%"></span></span>`
+    : `<span class="pl-s">Pick subtopics or write a target to track the day</span>`;
   document.getElementById("pl-day-note").value = e.note || "";
   const mins = (typeof mergedTimeLog === "function" ? mergedTimeLog() : {})[plDay] || 0;
   document.getElementById("pl-studied").innerHTML = mins
@@ -174,6 +238,26 @@ function plRenderDay() {
 
   document.getElementById("pl-day-cards").innerHTML = PL_TRACKS.map((t) => {
     const te = e.tracks[t.k];
+    if (t.k === "bpsc") {
+      // BPSC: no subject/subtopic lists. Pick Prelims, Mains or both, then write the target.
+      const bItems = plTopicList(te.topic), bDone = plTopicList(te.doneTopics);
+      const on = String(te.subject || "").split(",").map((x) => x.trim()).filter(Boolean);
+      return `<div class="pl-card pl-bpsc">
+        <div class="pl-track">${t.n}</div>
+        <div class="pl-modes">${["Prelims", "Mains"].map((m) => `<span class="pl-mode ${on.includes(m) ? "on" : ""}" onclick="plToggleBpscMode('${m}')">${m}</span>`).join("")}</div>
+        <div class="pl-label">Elements <span class="pl-s">(type one, press Enter or Add)</span>
+          <form class="pl-add" onsubmit="event.preventDefault(); plBpscAdd(this.elements[0])">
+            <input class="pl-input" type="text" placeholder="e.g. Bihar history, Current affairs">
+            <button class="btn small" type="submit">Add</button>
+          </form></div>
+        ${bItems.length ? `<div class="pl-tcheck">${bItems.map((n) => `<label class="pl-done ${bDone.includes(n) ? "tdone" : ""}"><input type="checkbox" ${bDone.includes(n) ? "checked" : ""} data-n="${escapeHtml(n)}" onchange="plToggleTopicDone('bpsc', this.getAttribute('data-n'), this.checked)"> ${escapeHtml(n)}${plTopicList(te.carried).includes(n) ? ` <span class="pl-carry">↪ carried</span>` : ""} <span class="pl-ic" title="Remove" data-n="${escapeHtml(n)}" onclick="event.preventDefault(); plBpscRemove(this.getAttribute('data-n'))">✕</span></label>`).join("")}</div>` : ""}
+        <label class="pl-label">Target
+          <textarea class="pl-input" rows="3" placeholder="e.g. Bihar history + 20 MCQs"
+            oninput="plSetField('bpsc','target',this.value,true)" onblur="plFlushDaySave()">${escapeHtml(te.target)}</textarea></label>
+        ${bItems.length ? "" : `<label class="pl-done"><input type="checkbox" ${te.done ? "checked" : ""} onchange="plSetField('bpsc','done',this.checked)"> Target done</label>`}
+        ${(() => { const st = plTrackStats(te); return st.total ? `<div class="pl-prog"><span>${st.done}/${st.total} · ${Math.round(st.done / st.total * 100)}%</span><span class="stat-bar pl-bar"><span class="stat-bar-fill" style="width:${st.done / st.total * 100}%"></span></span></div>` : ""; })()}
+      </div>`;
+    }
     const subs = planner.tracks[t.k] || [];
     const names = subs.map((s) => s.name);
     const opts = (te.subject && !names.includes(te.subject) ? [te.subject] : []).concat(names);
@@ -201,7 +285,9 @@ function plRenderDay() {
       <label class="pl-label">Target
         <textarea class="pl-input" rows="3" placeholder="e.g. Class 3 + notes + 1 answer"
           oninput="plSetField('${t.k}','target',this.value,true)" onblur="plFlushDaySave()">${escapeHtml(te.target)}</textarea></label>
-      <label class="pl-done"><input type="checkbox" ${te.done ? "checked" : ""} onchange="plSetField('${t.k}','done',this.checked)"> Target done</label>
+      ${selTopics.length ? `<div class="pl-tcheck">${selTopics.map((n) => `<label class="pl-done ${plTopicList(te.doneTopics).includes(n) ? "tdone" : ""}"><input type="checkbox" ${plTopicList(te.doneTopics).includes(n) ? "checked" : ""} data-n="${escapeHtml(n)}" onchange="plToggleTopicDone('${t.k}', this.getAttribute('data-n'), this.checked)"> ${escapeHtml(n)}${plTopicList(te.carried).includes(n) ? ` <span class="pl-carry">↪ carried</span>` : ""}</label>`).join("")}</div>`
+        : `<label class="pl-done"><input type="checkbox" ${te.done ? "checked" : ""} onchange="plSetField('${t.k}','done',this.checked)"> Target done</label>`}
+      ${(() => { const st = plTrackStats(te); return st.total ? `<div class="pl-prog"><span>${st.done}/${st.total} · ${Math.round(st.done / st.total * 100)}%</span><span class="stat-bar pl-bar"><span class="stat-bar-fill" style="width:${st.done / st.total * 100}%"></span></span></div>` : ""; })()}
     </div>`;
   }).join("");
 }
@@ -209,7 +295,7 @@ function plRenderDay() {
 function plRenderSubjects() {
   const el = document.getElementById("pl-subjects");
   if (!el) return;
-  el.innerHTML = PL_TRACKS.map((t) => {
+  el.innerHTML = PL_TRACKS.filter((t) => t.k !== "bpsc").map((t) => {
     const subs = planner.tracks[t.k] || [];
     const done = subs.filter((s) => s.status === "done").length;
     return `<div class="pl-card pl-${t.k}">
@@ -231,12 +317,12 @@ function plRenderSubjects() {
             ${plNotePathHtml(s)}
           </div>
           ${open ? `<div class="pl-topics">
-            ${t.k === "prelims" ? "" : `<label class="pl-label">Goes in notes under
+            ${plPlain(t.k) ? "" : `<label class="pl-label">Goes in notes under
               <select class="pl-input" onchange="plSetNoteTarget('${s.id}', this.value)">
                 <option value="">— not in notes —</option>
                 ${(planner.noteSubjects || []).map((n) => `<option value="${n.id}" ${n.id === s.noteSubjectId ? "selected" : ""}>${escapeHtml(n.name)}</option>`).join("")}
               </select></label>`}
-            ${t.k !== "prelims" && s.noteSubjectId && tp.some((x) => !x.microthemeId) ? `<span class="btn small" onclick="plPush('${s.id}')">↻ Match ${tp.filter((x) => !x.microthemeId).length} with notes</span>` : ""}
+            ${!plPlain(t.k) && s.noteSubjectId && tp.some((x) => !x.microthemeId) ? `<span class="btn small" onclick="plPush('${s.id}')">↻ Match ${tp.filter((x) => !x.microthemeId).length} with notes</span>` : ""}
             ${tp.length ? `<ul>${tp.map((x, j) => `<li class="${x.done ? "tdone" : ""}">
               <label><input type="checkbox" ${x.done ? "checked" : ""} onchange="plToggleTopic('${s.id}','${x.id}',this.checked)"> <span>${escapeHtml(x.name)}</span></label>
               ${x.microthemeId && findMicrotheme(x.microthemeId) ? `<span class="pl-ic" title="Open notes" onclick="openMicrotheme('${x.microthemeId}')">📖</span>` : ""}
@@ -250,7 +336,7 @@ function plRenderSubjects() {
           </div>` : ""}
         </li>`;
       }).join("")}</ol>` : `<div class="weak-empty">No subjects yet. Add the first one below.</div>`}
-      ${t.k === "prelims" ? `<form class="pl-add" onsubmit="event.preventDefault(); plAddSubject('${t.k}', this.elements[0], null)">
+      ${plPlain(t.k) ? `<form class="pl-add" onsubmit="event.preventDefault(); plAddSubject('${t.k}', this.elements[0], null)">
         <input class="pl-input" type="text" placeholder="Add subject, e.g. Economy">
         <button class="btn small" type="submit">Add</button>
       </form>` : `<form class="pl-add pl-add-subj" onsubmit="event.preventDefault(); plAddSubject('${t.k}', this.elements[0], this.elements[1])">
@@ -311,10 +397,16 @@ function plRenderLog() {
 /* ------------------------------ actions ------------------------------ */
 function plPickDay(v) { if (!v) return; plFlushDaySave(); plDay = v; plRenderDay(); }
 function plSetNote(v) { plEntry(plDay).note = v; plQueueDaySave(); }
+function plToggleBpscMode(m) {
+  const te = plEntry(plDay).tracks.bpsc;
+  const cur = String(te.subject || "").split(",").map((x) => x.trim()).filter(Boolean);
+  te.subject = ["Prelims", "Mains"].filter((x) => (x === m ? !cur.includes(x) : cur.includes(x))).join(", ");
+  plQueueDaySave(); plRenderDay();
+}
 function plSetField(track, field, value, typing) {
   const te = plEntry(plDay).tracks[track];
   te[field] = value;
-  if (field === "subject") { te.topic = ""; plPickOpen[track] = false; }
+  if (field === "subject") { te.topic = ""; te.doneTopics = ""; te.carried = ""; plPickOpen[track] = false; }
   plQueueDaySave();
   if (!typing && (field === "subject" || field === "topic")) plRenderDay();
 }
